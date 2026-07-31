@@ -34,6 +34,20 @@ nota_metodologica_atualizacao_2025.md):
   4. Grade completa (ano x município x atividade) preenchida com zero antes
      de calcular os deltas — senão uma atividade que aparece só em alguns
      anos tem seus intervalos silenciosamente pulados.
+  5. Renormalização pelo peso efetivamente válido (soma/peso_total) — sem
+     isso, séries com histórico incompleto (ex.: 2018-2025, sem os
+     intervalos 2016-17/2017-18 do Anexo original) ficam artificialmente
+     puxadas para perto de zero. Bug identificado na validação de
+     2026-08: caiu no meio do caminho ao reescrever a partir da função
+     original `tendencia_emprego_renda`, que já tinha essa correção.
+  6. Atividade que desaparece (vínculos caem a zero): a renda-hora fica
+     indefinida (0/0), o que descartava o intervalo inteiro mesmo com
+     Δemprego = -1 sendo um sinal válido e forte. Convenção adotada:
+     tratar o desaparecimento como colapso total (Δrenda = -1 por
+     definição), não como dado ausente. Identificado comparando com um
+     caso real do painel Macroplan onde a atividade morre em 2023 e a
+     tendência publicada é fortemente negativa (-0,62), mas o cálculo sem
+     essa correção dava ~0.
 
 Este script é para rodar no Colab, com o projeto de billing "densidade2025"
 que você já usa. Ele espera `tabela_cnae.xlsx` no mesmo diretório, com as
@@ -245,6 +259,14 @@ def calcular_tendencia_nivel(dados, min_vinculos_base=MIN_VINCULOS_BASE,
         np.nan,
     )
 
+    # Atividade morreu no município (vínculos caem a zero): renda-hora fica
+    # indefinida (0/0) e delta_renda vira NaN, o que descartaria o intervalo
+    # inteiro mesmo quando delta_emprego = -1 é um sinal claro e válido.
+    # Convenção: tratamos o desaparecimento como colapso total (equivalente
+    # a delta_renda = -1), não como dado ausente.
+    atividade_morreu = base_valida & (df["vinculos"] == 0)
+    df.loc[atividade_morreu, "delta_renda"] = -1.0
+
     df["delta_emprego"] = _winsor(df["delta_emprego"])
     df["delta_renda"] = _winsor(df["delta_renda"])
 
@@ -268,7 +290,12 @@ def calcular_tendencia_nivel(dados, min_vinculos_base=MIN_VINCULOS_BASE,
         .groupby(["id_municipio", "atividade"], as_index=False, observed=True)
         .agg(soma=("contrib", "sum"), peso_total=("peso_valido", "sum"))
     )
-    out["tendencia_bruta"] = np.where(out["peso_total"] > 0, out["soma"], 0.0)
+    # Renormaliza pelo peso efetivamente válido: uma série com histórico
+    # incompleto (ex.: começa em 2018, sem os intervalos 2016-17/2017-18 do
+    # Anexo original) não pode ser penalizada só por ter menos anos.
+    out["tendencia_bruta"] = np.where(
+        out["peso_total"] > 0, out["soma"] / out["peso_total"], 0.0
+    )
     out["tendencia_norm"] = out["tendencia_bruta"] / np.sqrt(2)
     return out[["id_municipio", "atividade", "tendencia_bruta", "tendencia_norm"]]
 
