@@ -449,7 +449,7 @@ def diagnostico(df, col_mun="id_municipio"):
     print(f"\nTotal Confirmada: {len(conf):,} | Total Potencial: {len(pot):,}")
     print("\nDistribuição por categoria (só elegíveis):")
     print(df[df["elegivel"]]["categoria_oportunidade"].value_counts().to_string())
-    return por_mun
+    return por_mun_conf
 
 
 if __name__ == "__main__":
