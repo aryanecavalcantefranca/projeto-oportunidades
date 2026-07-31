@@ -169,7 +169,7 @@ def calcular_ql_mei(base_ano_recente, niveis=NIVEIS):
         tot = d["numero_de_meis"].sum()
         d["QL_MEI"] = (d["numero_de_meis"] / tot_mun) / (tot_ativ / tot)
         d["QL_MEI"] = d["QL_MEI"].replace([np.inf, -np.inf], np.nan).fillna(0.0)
-        resultados[nivel] = d[["id_municipio", "atividade", "QL_MEI"]]
+        resultados[nivel] = d[["id_municipio", "atividade", "numero_de_meis", "QL_MEI"]]
     return resultados
 
 
@@ -190,6 +190,7 @@ def gerar_tudo(base_completa, ano_referencia_ql=2025, niveis=NIVEIS,
         )
         out["tendencia_mei"] = out["tendencia_mei"].fillna(0.0)
         out["QL_MEI"] = out["QL_MEI"].fillna(0.0)
+        out["numero_de_meis"] = out["numero_de_meis"].fillna(0)
         arquivo = f"{prefixo}_{nivel}.xlsx"
         out.to_excel(arquivo, index=False)
         print(f"-> Salvo: {arquivo} ({len(out):,} linhas)")

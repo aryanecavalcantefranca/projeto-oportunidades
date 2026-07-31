@@ -309,6 +309,35 @@ def calcular_tendencia_nivel(dados, min_vinculos_base=MIN_VINCULOS_BASE,
 
 
 # =============================================================================
+# 6b. QL OFICIAL — massa salarial, referência estado de São Paulo (Anexo pág. 9)
+# =============================================================================
+# Reaproveita o parquet já extraído (rais_municipio_cnae_{ANO_MIN}_{ANO_MAX}),
+# sem precisar de nova consulta ao BigQuery. Diferente do QL que você já tinha
+# (ql_secao_2025.xlsx etc.), que usa vínculos — o Anexo define QL sobre massa
+# salarial (nota_metodologica_atualizacao_2025.md, seção 3). Deflação não
+# importa aqui: é uma razão dentro do mesmo ano, o fator se cancela.
+
+def calcular_ql_massa(base_completa, ano=2025, niveis=NIVEIS):
+    """`base_completa` = saída de juntar_cnae(deflacionar(rais))."""
+    base_ano = base_completa[base_completa["ano"] == ano]
+    resultados = {}
+    for nivel in niveis:
+        d = (
+            base_ano.groupby(["id_municipio", nivel], observed=True, as_index=False)
+            ["massa_salarial_real"].sum()
+            .rename(columns={nivel: "atividade"})
+            .dropna(subset=["atividade"])
+        )
+        tot_mun = d.groupby("id_municipio", observed=True)["massa_salarial_real"].transform("sum")
+        tot_ativ = d.groupby("atividade", observed=True)["massa_salarial_real"].transform("sum")
+        tot = d["massa_salarial_real"].sum()
+        d["QL"] = (d["massa_salarial_real"] / tot_mun) / (tot_ativ / tot)
+        d["QL"] = d["QL"].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        resultados[nivel] = d[["id_municipio", "atividade", "QL"]]
+    return resultados
+
+
+# =============================================================================
 # 7. ORQUESTRAÇÃO — roda os 5 níveis e salva
 # =============================================================================
 

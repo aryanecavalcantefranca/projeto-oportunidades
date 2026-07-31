@@ -169,6 +169,23 @@ def calcular_tendencia_nivel(dados, coluna="estabelecimentos",
 
 
 # =============================================================================
+# 3b. QL DE ESTABELECIMENTOS — mesma lógica do QL tradicional, sobre nº de
+# estabelecimentos em vez de massa salarial. Alimenta o bloco "Caracterização
+# empresas" do painel (Nº de estabelecimentos / Tendência / Especialização).
+# =============================================================================
+
+def calcular_ql_nivel(dados_ano, coluna="estabelecimentos"):
+    """`dados_ano` = uma fatia de um único ano da saída de agregar_nivel()."""
+    d = dados_ano.copy()
+    tot_mun = d.groupby("id_municipio", observed=True)[coluna].transform("sum")
+    tot_ativ = d.groupby("atividade", observed=True)[coluna].transform("sum")
+    tot = d[coluna].sum()
+    d["QL"] = (d[coluna] / tot_mun) / (tot_ativ / tot)
+    d["QL"] = d["QL"].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    return d[["id_municipio", "atividade", "QL"]]
+
+
+# =============================================================================
 # 4. ORQUESTRAÇÃO — roda os 5 níveis e salva
 # =============================================================================
 
@@ -183,6 +200,28 @@ def gerar_todas_tendencias(base_completa, niveis=NIVEIS,
         tendencia.to_excel(arquivo, index=False)
         print(f"-> Salvo: {arquivo} ({len(tendencia):,} linhas)")
         resultados[nivel] = tendencia
+    return resultados
+
+
+def gerar_tudo(base_completa, ano_referencia=2025, niveis=NIVEIS, prefixo="estabelecimentos_sp"):
+    """Junta contagem (ano de referência) + QL + tendência, por nível — mesmo
+    padrão de tendencia_mei.gerar_tudo()."""
+    resultados = {}
+    for nivel in niveis:
+        dados = agregar_nivel(base_completa, nivel)
+        tendencia = calcular_tendencia_nivel(dados)
+
+        dados_ano = dados[dados["ano"] == ano_referencia][["id_municipio", "atividade", "estabelecimentos"]]
+        ql = calcular_ql_nivel(dados_ano)
+
+        out = dados_ano.merge(ql, on=["id_municipio", "atividade"], how="left")
+        out = out.merge(tendencia, on=["id_municipio", "atividade"], how="left")
+        out["tendencia_estabelecimentos"] = out["tendencia_estabelecimentos"].fillna(0.0)
+
+        arquivo = f"{prefixo}_{nivel}.xlsx"
+        out.to_excel(arquivo, index=False)
+        print(f"-> Salvo: {arquivo} ({len(out):,} linhas)")
+        resultados[nivel] = out
     return resultados
 
 
