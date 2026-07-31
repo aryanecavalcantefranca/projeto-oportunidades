@@ -359,8 +359,12 @@ def categorizar(df):
     Baseado em `elegivel` (passou nos gates de porte), não em `e_oportunidade`
     (top-N + IV mínimo) — a categoria descreve a atividade, o status de
     Confirmada/Potencial descreve a prioridade dela no ranking. Uma atividade
-    pode ser "Vocação promissora" e ainda assim ficar fora do top-N do
+    pode ser "Oportunidade promissora" e ainda assim ficar fora do top-N do
     município (perdeu de outras 6 melhores).
+
+    Rótulos usam "Oportunidade", não "Vocação" — alinhado com o nome do
+    painel ("Mapeamento de Oportunidades Estratégicas") e com o pedido do
+    usuário em 2026-08 de padronizar a terminologia.
     """
     d = df.copy()
     cond = [
@@ -371,9 +375,9 @@ def categorizar(df):
     ]
     rotulo = [
         "Não elegível",
-        "Vocação promissora",
-        "Vocação sem crescimento",
-        "Vocação potencial",
+        "Oportunidade promissora",
+        "Oportunidade sem crescimento",
+        "Oportunidade potencial",
     ]
     d["categoria_oportunidade"] = np.select(cond, rotulo, default="Sem classificação")
 
