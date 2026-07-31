@@ -48,9 +48,13 @@ Seleção — ranking geral, TOP_N é só filtro de exibição (mudou em 2026-08
 pedido do usuário: "a classificação precisa ser geral, os 6 eu preciso só
 naquela parte do mapeamento"):
   1. Elegibilidade (gates de porte: vínculos, estabelecimentos, relevância, QL).
-  2. `posicao_municipio`: ranking 1..N sobre TODAS as elegíveis do município,
-     sem limite de tamanho — um município com 40 atividades elegíveis tem
-     posições de 1 a 40.
+  2. `posicao_municipio`: ranking 1..N sobre TODAS as atividades do
+     município com índice_oportunidade > 0, elegíveis ou não (mudou de novo
+     em 2026-08, a pedido do usuário: "nos casos em que o índice seja maior
+     que 0, haja uma posição entre todas as atividades de cada nível") — uma
+     atividade com sinal positivo mas que não passou nos gates de porte
+     (base pequena demais para ser levada a sério como Confirmada/Potencial)
+     ainda ganha uma posição no ranking, só não vira status_oportunidade.
   3. `status_oportunidade` distingue, sobre TODAS as elegíveis: "Confirmada"
      (IV >= IV_MINIMO) de "Potencial" (elegível, abaixo do corte absoluto) —
      sem limite de posição também.
@@ -325,12 +329,21 @@ def aplicar_gates(df, gates=GATES):
 
 def selecionar_oportunidades(df, iv_minimo=IV_MINIMO, top_n=TOP_N):
     """
-    posicao_municipio é um ranking GERAL — 1..N sobre TODAS as atividades
-    elegíveis do município, sem limite de tamanho. O corte de TOP_N não vive
-    mais aqui: é um filtro de exibição (a tela de Mapeamento, que só tem
-    TOP_N caixas), não uma restrição da base de dados. Isso decidido em
-    2026-08 depois de o usuário apontar que a classificação precisa ser
-    geral — o "6" é só daquela tela.
+    posicao_municipio é um ranking GERAL — 1..N sobre TODAS as atividades do
+    município com indice_oportunidade > 0, elegíveis ou não, sem limite de
+    tamanho. O corte de TOP_N não vive mais aqui: é um filtro de exibição (a
+    tela de Mapeamento, que só tem TOP_N caixas), não uma restrição da base
+    de dados. Isso decidido em 2026-08 depois de o usuário apontar que a
+    classificação precisa ser geral — o "6" é só daquela tela.
+
+    A base do ranking é `indice_oportunidade > 0`, não `elegivel` (mudou de
+    novo em 2026-08, a pedido do usuário: "nos casos em que o índice seja
+    maior que 0, haja uma posição entre todas as atividades de cada nível")
+    — uma atividade pode ter índice positivo e ainda não passar nos gates de
+    porte (base pequena demais pra virar Confirmada/Potencial); antes ela
+    ficava sem posição nenhuma (NaN), agora entra no ranking geral como
+    qualquer outra. `elegivel` continua sendo o que decide status_oportunidade
+    logo abaixo — não vira elegível só por ter posição.
 
     status_oportunidade, sobre TODAS as elegíveis (sem limite de posição):
       "Confirmada" -> IV >= iv_minimo (oportunidade "de verdade")
@@ -344,7 +357,7 @@ def selecionar_oportunidades(df, iv_minimo=IV_MINIMO, top_n=TOP_N):
     """
     d = df.copy()
     d["posicao_municipio"] = (
-        d.where(d["elegivel"])
+        d.where(d["indice_oportunidade"] > 0)
         .groupby("id_municipio", observed=True)["indice_oportunidade"]
         .rank(ascending=False, method="first")
     )
