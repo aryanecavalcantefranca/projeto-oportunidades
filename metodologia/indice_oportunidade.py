@@ -17,23 +17,32 @@ Reaproveita tudo que já foi validado nas etapas anteriores:
   - densidade_{nivel}.xlsx / densidade_classe_corrigida.xlsx: densidade validada
   - renda_vinculos_relevancia_{nivel}_2025.xlsx: vínculos, renda média, relevância
 
-Índice de Oportunidade (IV): média geométrica ponderada de 5 pilares em
-[0,1] — especialização (0,30), relevância (0,25), tendência (0,20),
-densidade (0,15), empreendedorismo (0,10). Geométrica, não aritmética: exige
-desempenho razoável em todas as dimensões, evita que relevância altíssima
-com especialização zero vire "oportunidade" sozinha.
+Índice de Oportunidade (IV) = núcleo + bônus:
 
-Empreendedorismo (MEI) — tratamento especial: nem toda atividade tem perfil
-de MEI (indústria pesada, por exemplo, é estruturalmente incompatível — em
-muitos casos nem é elegível para MEI por lei). Penalizar uma vocação
-industrial forte por não ter MEI seria injusto. Por isso: se o total de
-MEIs de uma atividade em SP inteiro (soma de todos os municípios) for menor
-que MEI_MIN_TOTAL_ESTADO, o pilar de empreendedorismo é marcado como
-NÃO APLICÁVEL (NaN) para essa atividade em todo município — não como zero.
-Pilar ausente é excluído da média geométrica e os pesos dos outros 4 pilares
-são renormalizados proporcionalmente (mesma lógica de
-`metodologia_vocacoes_2025.py::indice_vocacao`, que a primeira versão deste
-arquivo tinha perdido ao reescrever — corrigido em 2026-08).
+  núcleo = média geométrica ponderada de 4 pilares em [0,1] — especialização
+           (0,30), relevância (0,25), tendência (0,20), densidade (0,15).
+           Geométrica, não aritmética: exige desempenho razoável em todas as
+           dimensões do núcleo, evita que relevância altíssima com
+           especialização zero vire "oportunidade" sozinha.
+
+  bônus_empreendedorismo = 0,10 × pilar_empreendedorismo (aditivo, não entra
+           na geométrica). Empreendedorismo (MEI) é setorialmente muito
+           específico — concentrado em serviços, ausente por razões
+           estruturais em setores inteiros (indústria pesada, em muitos
+           casos nem elegível para MEI por lei). Se ele fosse um pilar
+           multiplicativo como os outros 4, um valor baixo (não precisa ser
+           zero) já derrubaria o índice inteiro por causa de como a
+           geométrica reage a números perto de zero — puniria vocação
+           industrial forte só por não ter perfil de microempreendedor.
+           Como bônus aditivo, só soma quando presente, nunca subtrai
+           (decisão de 2026-08, depois de discussão sobre esse ponto).
+
+  índice = mín(1,0, núcleo + bônus_empreendedorismo)
+
+marcar_mei_aplicavel() ainda existe, mas com outro papel: não é mais para
+evitar punição (o bônus aditivo já resolve isso), é para evitar que 2-3
+MEIs por acaso gerem um QL_MEI artificialmente alto e um bônus espúrio numa
+atividade onde o total de MEIs em SP inteiro é irrelevante.
 
 Seleção — corte duplo, mas com registro do "quase":
   1. Elegibilidade (gates de porte: vínculos, estabelecimentos, relevância, QL).
@@ -85,13 +94,18 @@ DENSIDADE_CONFIG = {
     "subclasse": ("densidade_subclasse.xlsx", "Subclasse"),
 }
 
-PESOS_IV = {
+# Núcleo: média geométrica, entra na conta multiplicativa (exige desempenho
+# mínimo em todas). Empreendedorismo NÃO está aqui — ver PESO_BONUS abaixo.
+PESOS_NUCLEO = {
     "especializacao": 0.30,
     "relevancia": 0.25,
     "tendencia": 0.20,
     "densidade": 0.15,
-    "empreendedorismo": 0.10,
 }
+# Bônus aditivo: soma até PESO_BONUS_EMPREENDEDORISMO ao núcleo, nunca
+# subtrai. Perfil de MEI é setorialmente muito específico (concentrado em
+# serviços) para forçar como exigência multiplicativa como os outros 4.
+PESO_BONUS_EMPREENDEDORISMO = 0.10
 GATES = {
     "min_vinculos": 20,
     "min_estabelecimentos": 3,
@@ -230,9 +244,10 @@ def pilar_empreendedorismo(ql_mei, tend_mei):
 
 
 def marcar_mei_aplicavel(df, minimo_estadual=MEI_MIN_TOTAL_ESTADO):
-    """Uma atividade só disputa o pilar de empreendedorismo se tiver MEI em
-    volume plausível em SP inteiro — evita punir vocação industrial forte só
-    por o setor ser estruturalmente incompatível com MEI."""
+    """Filtro de ruído: com o bônus aditivo (ver calcular_indice_oportunidade)
+    a ausência de MEI já não penaliza nada, então isso não protege mais
+    contra punição — protege contra RECOMPENSA espúria (2-3 MEIs por acaso
+    gerando um QL_MEI enorme e um bônus artificial)."""
     d = df.copy()
     total_estado = d.groupby("atividade")["numero_de_meis"].transform("sum")
     d["mei_aplicavel"] = total_estado >= minimo_estadual
@@ -243,12 +258,19 @@ def marcar_mei_aplicavel(df, minimo_estadual=MEI_MIN_TOTAL_ESTADO):
 # 3. TENDÊNCIA COMPOSTA E ÍNDICE DE OPORTUNIDADE
 # =============================================================================
 
-def calcular_indice_oportunidade(df, pesos=PESOS_IV, eps=EPS):
+def calcular_indice_oportunidade(df, pesos_nucleo=PESOS_NUCLEO,
+                                  peso_bonus_empreendedorismo=PESO_BONUS_EMPREENDEDORISMO, eps=EPS):
     """
-    Média geométrica ponderada. Pilar ausente (NaN) é excluído da conta e os
-    pesos dos demais são renormalizados — não é tratado como zero. Hoje só
-    pilar_empreendedorismo pode ficar NaN (ver marcar_mei_aplicavel), mas a
-    lógica é genérica para qualquer pilar futuro.
+    índice = núcleo (média geométrica de especialização/relevância/tendência/
+    densidade) + bônus de empreendedorismo (aditivo, 0 a peso_bonus, nunca
+    subtrai). Perfil de MEI é setorialmente específico demais (concentrado
+    em serviços) pra forçar como exigência multiplicativa como os outros 4
+    pilares — um setor sem MEI relevante não perde nada, só não ganha o
+    bônus.
+
+    Pilar do núcleo ausente (NaN) é excluído da conta e os pesos dos demais
+    são renormalizados — não é tratado como zero. Nenhum dos 4 pilares do
+    núcleo fica NaN hoje, mas a lógica é genérica para o caso futuro.
     """
     d = df.copy()
 
@@ -262,17 +284,20 @@ def calcular_indice_oportunidade(df, pesos=PESOS_IV, eps=EPS):
     d["pilar_densidade"] = pilar_densidade(d["densidade"])
     d["pilar_tendencia"] = pilar_tendencia(d["tendencia_composta"])
     d["pilar_empreendedorismo"] = pilar_empreendedorismo(d["QL_MEI"], d["tendencia_mei"])
-    d.loc[~d["mei_aplicavel"], "pilar_empreendedorismo"] = np.nan
+    d.loc[~d["mei_aplicavel"], "pilar_empreendedorismo"] = 0.0
 
     log_soma = np.zeros(len(d))
     peso_soma = np.zeros(len(d))
-    for nome, w in pesos.items():
+    for nome, w in pesos_nucleo.items():
         v = pd.to_numeric(d[f"pilar_{nome}"], errors="coerce")
         valido = v.notna().values
         v = v.fillna(eps).clip(eps, 1.0).values
         log_soma += np.where(valido, w * np.log(v), 0.0)
         peso_soma += np.where(valido, w, 0.0)
-    d["indice_oportunidade"] = np.where(peso_soma > 0, np.exp(log_soma / peso_soma), 0.0)
+    d["indice_nucleo"] = np.where(peso_soma > 0, np.exp(log_soma / peso_soma), 0.0)
+
+    d["bonus_empreendedorismo"] = peso_bonus_empreendedorismo * d["pilar_empreendedorismo"]
+    d["indice_oportunidade"] = (d["indice_nucleo"] + d["bonus_empreendedorismo"]).clip(0, 1)
     return d
 
 
@@ -376,11 +401,13 @@ def marcar_produtiva(df, secoes=SECOES_PRODUTIVAS):
 # =============================================================================
 
 def montar_oportunidades(nivel, base_rais_completa, ano=2025,
-                          pesos=PESOS_IV, gates=GATES, iv_minimo=IV_MINIMO, top_n=TOP_N,
+                          pesos_nucleo=PESOS_NUCLEO, peso_bonus_empreendedorismo=PESO_BONUS_EMPREENDEDORISMO,
+                          gates=GATES, iv_minimo=IV_MINIMO, top_n=TOP_N,
                           mei_min_total_estado=MEI_MIN_TOTAL_ESTADO):
     d = carregar_nivel(nivel, base_rais_completa, ano=ano)
     d = marcar_mei_aplicavel(d, minimo_estadual=mei_min_total_estado)
-    d = calcular_indice_oportunidade(d, pesos=pesos)
+    d = calcular_indice_oportunidade(d, pesos_nucleo=pesos_nucleo,
+                                      peso_bonus_empreendedorismo=peso_bonus_empreendedorismo)
     d = aplicar_gates(d, gates=gates)
     d = selecionar_oportunidades(d, iv_minimo=iv_minimo, top_n=top_n)
     d = categorizar(d)
