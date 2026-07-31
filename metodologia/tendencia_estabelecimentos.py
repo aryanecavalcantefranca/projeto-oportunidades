@@ -99,10 +99,11 @@ def extrair_estabelecimentos(billing_project_id="densidade2025", uf=UF,
 # 2. AGREGAÇÃO POR NÍVEL + GRADE COMPLETA
 # =============================================================================
 
-def agregar_nivel(base, nivel):
+def agregar_nivel(base, nivel, coluna="estabelecimentos"):
+    """Genérica: serve para qualquer série de estoque (estabelecimentos, MEI, ...)."""
     dados = (
         base.groupby(["ano", "id_municipio", nivel], observed=True, as_index=False)
-        .agg(estabelecimentos=("estabelecimentos", "sum"))
+        .agg(**{coluna: (coluna, "sum")})
         .rename(columns={nivel: "atividade"})
         .dropna(subset=["atividade"])
     )
@@ -115,7 +116,7 @@ def agregar_nivel(base, nivel):
     ).to_frame(index=False)
 
     dados = grade.merge(dados, on=["ano", "id_municipio", "atividade"], how="left")
-    dados["estabelecimentos"] = dados["estabelecimentos"].fillna(0)
+    dados[coluna] = dados[coluna].fillna(0)
     return dados
 
 
@@ -123,25 +124,29 @@ def agregar_nivel(base, nivel):
 # 3. DELTA, ÍNDICE ANUAL (UNIVARIADO), TENDÊNCIA PONDERADA
 # =============================================================================
 
-def calcular_tendencia_nivel(dados, min_base=MIN_ESTABELECIMENTOS_BASE,
-                              anos_excluidos=ANOS_EXCLUIDOS):
+def calcular_tendencia_nivel(dados, coluna="estabelecimentos",
+                              min_base=MIN_ESTABELECIMENTOS_BASE,
+                              anos_excluidos=ANOS_EXCLUIDOS,
+                              nome_saida="tendencia_estabelecimentos"):
     """
     `dados` = saída de agregar_nivel(): grade completa ano x município x
-    atividade, com estabelecimentos.
+    atividade, com a série de estoque em `coluna` (estabelecimentos, MEI...).
 
     Univariado: o índice anual já é a variação winsorizada, sem raiz(2).
     Pesos somam 1 -> tendencia já nasce em [-1, +1] (não precisa de
     tendencia_norm separado, ao contrário de tendencia_vinculos.py).
+    Genérica o bastante para servir tanto estabelecimentos quanto MEI —
+    ver tendencia_mei.py.
     """
     df = dados.sort_values(["id_municipio", "atividade", "ano"]).copy()
 
     g = df.groupby(["id_municipio", "atividade"], observed=True)
-    df["estab_ant"] = g["estabelecimentos"].shift(1)
+    df["valor_ant"] = g[coluna].shift(1)
 
-    base_valida = df["estab_ant"].fillna(0) >= min_base
+    base_valida = df["valor_ant"].fillna(0) >= min_base
     df["delta"] = np.where(
         base_valida,
-        (df["estabelecimentos"] - df["estab_ant"]) / df["estab_ant"],
+        (df[coluna] - df["valor_ant"]) / df["valor_ant"],
         np.nan,
     )
     df["delta"] = tv._winsor(df["delta"])
@@ -159,8 +164,8 @@ def calcular_tendencia_nivel(dados, min_base=MIN_ESTABELECIMENTOS_BASE,
     # Sem renormalização por peso_total — mesma decisão validada em
     # tendencia_vinculos.py (intervalo ausente/abaixo do piso contribui
     # zero, não redistribui peso).
-    out["tendencia_estabelecimentos"] = out["soma"]
-    return out[["id_municipio", "atividade", "tendencia_estabelecimentos"]]
+    out[nome_saida] = out["soma"]
+    return out[["id_municipio", "atividade", nome_saida]]
 
 
 # =============================================================================
