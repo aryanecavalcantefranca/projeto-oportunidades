@@ -4,9 +4,9 @@
 =============================================================================
 Consolida os pilares já validados (QL massa salarial, relevância, densidade,
 tendência composta, empreendedorismo) num Índice de Oportunidade único por
-nível de CNAE, aplica os filtros de elegibilidade, seleciona até TOP_N
-oportunidades por município (sem misturar níveis), categoriza e marca as
-seções produtivas — preenchendo os campos do painel "Mapeamento de
+nível de CNAE, aplica os filtros de elegibilidade, monta um ranking GERAL
+por município (sem misturar níveis, sem limite de tamanho), categoriza e
+marca as seções produtivas — preenchendo os campos do painel "Mapeamento de
 oportunidades estratégicas" e "Detalhamento: oportunidades estratégicas
 produtivas", exceto a caixa de oportunidade turística.
 
@@ -44,18 +44,22 @@ evitar punição (o bônus aditivo já resolve isso), é para evitar que 2-3
 MEIs por acaso gerem um QL_MEI artificialmente alto e um bônus espúrio numa
 atividade onde o total de MEIs em SP inteiro é irrelevante.
 
-Seleção — corte duplo, mas com registro do "quase":
+Seleção — ranking geral, TOP_N é só filtro de exibição (mudou em 2026-08 a
+pedido do usuário: "a classificação precisa ser geral, os 6 eu preciso só
+naquela parte do mapeamento"):
   1. Elegibilidade (gates de porte: vínculos, estabelecimentos, relevância, QL).
-  2. Posição <= TOP_N dentro do mesmo nível e mesmo município, entre as
-     elegíveis — SEMPRE calculada, mesmo se o IV não bate o mínimo. Isso
-     preenche as TOP_N caixas do painel mesmo quando o corte absoluto deixaria
-     alguma vazia.
-  3. Dentro do top-N, `status_oportunidade` distingue "Confirmada" (IV >=
-     IV_MINIMO) de "Potencial" (no top-N, elegível, mas abaixo do corte
-     absoluto) — o painel pode estilizar as duas de forma diferente em vez de
-     esconder a caixa.
-Um município pode ter zero oportunidades confirmadas; nenhum passa de TOP_N
-no total (confirmadas + potenciais).
+  2. `posicao_municipio`: ranking 1..N sobre TODAS as elegíveis do município,
+     sem limite de tamanho — um município com 40 atividades elegíveis tem
+     posições de 1 a 40.
+  3. `status_oportunidade` distingue, sobre TODAS as elegíveis: "Confirmada"
+     (IV >= IV_MINIMO) de "Potencial" (elegível, abaixo do corte absoluto) —
+     sem limite de posição também.
+  4. `exibir_mapeamento`: True só para Confirmada dentro das TOP_N posições —
+     é o filtro que a tela de Mapeamento usa pra decidir quais das 6 caixas
+     preencher. Não limita a base, só marca o que aparece naquela tela
+     específica.
+Um município pode ter zero oportunidades confirmadas; o ranking geral não
+tem teto, só `exibir_mapeamento` tem.
 
 Categoria: quadro 2x2 do Anexo (QL massa x tendência de vínculos), aplicado
 a QUALQUER atividade elegível (não só as do top-N) — é uma propriedade da
@@ -321,17 +325,22 @@ def aplicar_gates(df, gates=GATES):
 
 def selecionar_oportunidades(df, iv_minimo=IV_MINIMO, top_n=TOP_N):
     """
-    posicao_municipio é calculada para qualquer atividade elegível dentro do
-    top_n — não só as que passam do IV_MINIMO. Isso preenche as TOP_N caixas
-    do painel mesmo quando o corte absoluto deixaria alguma vazia.
+    posicao_municipio é um ranking GERAL — 1..N sobre TODAS as atividades
+    elegíveis do município, sem limite de tamanho. O corte de TOP_N não vive
+    mais aqui: é um filtro de exibição (a tela de Mapeamento, que só tem
+    TOP_N caixas), não uma restrição da base de dados. Isso decidido em
+    2026-08 depois de o usuário apontar que a classificação precisa ser
+    geral — o "6" é só daquela tela.
 
-    status_oportunidade distingue, dentro do top_n:
+    status_oportunidade, sobre TODAS as elegíveis (sem limite de posição):
       "Confirmada" -> IV >= iv_minimo (oportunidade "de verdade")
-      "Potencial"  -> elegível e no top_n, mas abaixo do corte absoluto
-                      (ex.: município pequeno onde nada bate 0,35, mas ainda
-                      há uma atividade relativamente melhor que as outras)
+      "Potencial"  -> elegível, mas abaixo do corte absoluto de IV
     e_oportunidade fica True só para "Confirmada" — mantém compatível com
     quem já usa esse campo (ex.: categorizar()).
+
+    exibir_mapeamento: conveniência para a tela de Mapeamento no Power BI —
+    True só para Confirmada dentro das top_n posições do município. Filtra
+    só a visual das TOP_N caixas; não afeta posicao_municipio nem status.
     """
     d = df.copy()
     d["posicao_municipio"] = (
@@ -340,13 +349,12 @@ def selecionar_oportunidades(df, iv_minimo=IV_MINIMO, top_n=TOP_N):
         .rank(ascending=False, method="first")
     )
 
-    no_top_n = d["elegivel"] & (d["posicao_municipio"] <= top_n)
-    confirmada = no_top_n & (d["indice_oportunidade"] >= iv_minimo)
-    potencial = no_top_n & ~confirmada
+    confirmada = d["elegivel"] & (d["indice_oportunidade"] >= iv_minimo)
+    potencial = d["elegivel"] & ~confirmada
 
     d["status_oportunidade"] = np.select([confirmada, potencial], ["Confirmada", "Potencial"], default="")
     d["e_oportunidade"] = confirmada
-    d.loc[~no_top_n, "posicao_municipio"] = np.nan
+    d["exibir_mapeamento"] = confirmada & (d["posicao_municipio"] <= top_n)
     return d
 
 
@@ -435,21 +443,28 @@ def montar_todos_os_niveis(base_rais_completa, niveis=NIVEIS, ano=2025, prefixo=
 # =============================================================================
 
 def diagnostico(df, col_mun="id_municipio"):
-    """Alvo razoável: mediana de Confirmadas entre a metade e o total do
-    TOP_N por município, com uma cauda de municípios sem nenhuma
-    confirmada (mas ainda com Potenciais preenchendo as caixas do painel)."""
+    """
+    Confirmadas/Potenciais agora são contagens GERAIS (sem teto de TOP_N) —
+    um município pode ter, por exemplo, 40 Confirmadas se realmente tiver
+    40 atividades elegíveis acima do IV_MINIMO. `exibir_mapeamento` é a
+    métrica que importa para a tela de Mapeamento especificamente (quantas
+    das TOP_N caixas cada município preenche).
+    """
     conf = df[df["status_oportunidade"] == "Confirmada"]
     pot = df[df["status_oportunidade"] == "Potencial"]
     por_mun_conf = conf.groupby(col_mun, observed=True).size()
     por_mun_top = df[df["status_oportunidade"] != ""].groupby(col_mun, observed=True).size()
+    por_mun_mapa = df[df["exibir_mapeamento"]].groupby(col_mun, observed=True).size()
     todos = df[col_mun].nunique()
 
     print(f"Municípios na base .................................. {todos}")
     print(f"Municípios com >= 1 Confirmada ...................... {por_mun_conf.size} ({por_mun_conf.size/todos:.1%})")
     print(f"Municípios só com Potencial (nenhuma Confirmada) .... {por_mun_top.size - por_mun_conf.size}")
-    print(f"Municípios sem nada no top-N (nem Potencial) ........ {todos - por_mun_top.size}")
-    print("\nConfirmadas por município:")
+    print(f"Municípios sem nada elegível (nem Potencial) ........ {todos - por_mun_top.size}")
+    print("\nConfirmadas por município (ranking geral, sem teto):")
     print(por_mun_conf.describe().round(2).to_string())
+    print("\nCaixas preenchidas na tela de Mapeamento (exibir_mapeamento, teto TOP_N):")
+    print(por_mun_mapa.describe().round(2).to_string())
     print(f"\nTotal Confirmada: {len(conf):,} | Total Potencial: {len(pot):,}")
     print("\nDistribuição por categoria (só elegíveis):")
     print(df[df["elegivel"]]["categoria_oportunidade"].value_counts().to_string())
