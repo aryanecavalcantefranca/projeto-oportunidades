@@ -1,6 +1,6 @@
 """
 =============================================================================
-TENDÊNCIA DE MEI + QL_MEI — Receita Federal/Simples Nacional, 2019-2025, SP
+TENDÊNCIA DE MEI + QL_MEI — Receita Federal/Simples Nacional, 2021-2025, SP
 =============================================================================
 Reconstrói a extração de MEIs ativos (Receita Federal via basedosdados)
 e recalcula a tendência com a mesma fórmula univariada já validada em
@@ -16,9 +16,33 @@ transforma a variação numa contagem absoluta em vez de percentual,
 distorcendo o índice exatamente como o bug de explosão de base pequena
 que já corrigimos em vínculos.
 
-Sem quebra de série (a fonte é Receita Federal/Simples, não RAIS) — por
-isso NÃO se exclui o intervalo 2021-2022 aqui, ao contrário de vínculos e
-estabelecimentos (ver nota_metodologica_atualizacao_2025.md, seção 2.1).
+Dois bugs de extração identificados e corrigidos em 2026-08, validando
+os totais retornados (139 milhões de "opções de MEI" em SP era
+fisicamente impossível — o Brasil inteiro tem ~15-16 milhões):
+
+  1. `br_me_cnpj.estabelecimentos` é um PAINEL MENSAL (colunas ano/mes/
+     data), não uma foto única — cada estabelecimento aparece uma vez por
+     mês de histórico. A extração original não filtrava (ano, mes),
+     então o JOIN multiplicava cada empresa por ~42 linhas em média
+     (810M linhas / 19,1M CNPJs distintos). Corrigido filtrando
+     e.ano={ano} AND e.mes=12 (retrato de dezembro, que é exatamente o
+     "31/12" da metodologia).
+  2. `simples.data_exclusao_mei` está preenchido em só 0,02% dos casos —
+     não dá para confiar nele sozinho para detectar quando um MEI fecha.
+     Corrigido cruzando com `estabelecimentos.situacao_cadastral = '2'`
+     (ATIVA — confirmado por contagem: os 5 códigos oficiais da Receita
+     somam exatamente o total de linhas do mês, e código 2 é o único
+     com magnitude plausível para "empresas em atividade").
+
+  A tabela `br_me_cnpj.estabelecimentos` só tem histórico a partir de
+  nov/2021 (sem 2019/2020) — por isso o período de tendência de MEI é
+  2021-2025 (4 intervalos válidos: 21→22, 22→23, 23→24, 24→25, pesos
+  0,60/0,20/0,10/0,06), mais curto que vínculos/estabelecimentos. Sem
+  renormalização — mesma decisão validada em tendencia_vinculos.py.
+
+Sem quebra de série tipo RAIS aqui — por isso NÃO se exclui nenhum
+intervalo por orientação do MTE (isso só vale para RAIS; ver
+nota_metodologica_atualizacao_2025.md, seção 2.1).
 
 QL_MEI: mesma fórmula do QL tradicional (calcular_ql em
 metodologia_vocacoes_2025.py), mas sobre número de MEIs ativos em vez de
@@ -27,7 +51,10 @@ massa salarial, referência estado de São Paulo, ano mais recente (2025).
 Cautela documentada na nota metodológica (item 9, "itens em aberto"):
 existem subclasses vedadas ao MEI (atividades que não podem ser MEI) —
 isso gera zeros legítimos em boa parte da base fina (subclasse), não é
-erro.
+erro. Mesmo com a correção do item 2 acima, uma empresa que "graduou" do
+MEI para outro regime sem baixar o CNPJ (fica ATIVA, só deixa de ser
+MEI) ainda pode ser contada se a saída não estiver registrada em nenhum
+dos dois campos — limitação residual, não resolvida.
 
 Ordem de execução: extrair_mei_historico -> juntar_cnae (de
 tendencia_vinculos) -> calcular_tendencia_mei / calcular_ql_mei
@@ -43,10 +70,12 @@ import tendencia_vinculos as tv
 import tendencia_estabelecimentos as te
 
 UF = tv.UF
-ANOS_MEI = range(2019, 2026)   # sem quebra de série -> usa todos os intervalos
+ANOS_MEI = range(2021, 2026)   # br_me_cnpj.estabelecimentos só tem histórico desde nov/2021
 NIVEIS = tv.NIVEIS
 
 MIN_MEI_BASE = 3   # mesmo piso usado em estabelecimentos
+
+SITUACAO_CADASTRAL_ATIVA = "2"   # confirmado por contagem em SP, dez/2024
 
 
 # =============================================================================
@@ -54,7 +83,15 @@ MIN_MEI_BASE = 3   # mesmo piso usado em estabelecimentos
 # =============================================================================
 
 def extrair_mei_ano(ano, billing_project_id="densidade2025", uf=UF):
-    """Retrato de MEIs ativos em 31/12/`ano`. Mesma query do seu notebook."""
+    """
+    Retrato de MEIs ativos em 31/12/`ano`.
+
+    e.ano={ano} AND e.mes=12: seleciona o retrato de dezembro dentro do
+    painel mensal — sem isso, o JOIN duplica cada empresa por todos os
+    meses de histórico disponíveis.
+    e.situacao_cadastral='2' (ATIVA): pega o fechamento real da empresa,
+    já que data_exclusao_mei quase nunca é preenchido.
+    """
     import basedosdados as bd
 
     query = f"""
@@ -66,6 +103,9 @@ def extrair_mei_ano(ano, billing_project_id="densidade2025", uf=UF):
     INNER JOIN `basedosdados.br_me_cnpj.simples` s
         ON e.cnpj_basico = s.cnpj_basico
     WHERE e.sigla_uf = '{uf}'
+      AND e.ano = {ano}
+      AND e.mes = 12
+      AND e.situacao_cadastral = '{SITUACAO_CADASTRAL_ATIVA}'
       AND s.opcao_mei = 1
       AND s.data_opcao_mei <= '{ano}-12-31'
       AND (s.data_exclusao_mei > '{ano}-12-31' OR s.data_exclusao_mei IS NULL)
@@ -173,7 +213,7 @@ if __name__ == "__main__":
 #     sys.modules.pop(m, None)
 # import tendencia_mei as tm
 #
-# mei_hist = tm.extrair_mei_historico(billing_project_id="densidade2025")   # ~2-3 min (7 anos)
+# mei_hist = tm.extrair_mei_historico(billing_project_id="densidade2025")   # ~1-2 min (5 anos)
 # base_mei = tm.tv.juntar_cnae(mei_hist, "tabela_cnae.xlsx")
 #
 # resultados = tm.gerar_tudo(base_mei)
