@@ -34,12 +34,14 @@ nota_metodologica_atualizacao_2025.md):
   4. Grade completa (ano x município x atividade) preenchida com zero antes
      de calcular os deltas — senão uma atividade que aparece só em alguns
      anos tem seus intervalos silenciosamente pulados.
-  5. Renormalização pelo peso efetivamente válido (soma/peso_total) — sem
-     isso, séries com histórico incompleto (ex.: 2018-2025, sem os
-     intervalos 2016-17/2017-18 do Anexo original) ficam artificialmente
-     puxadas para perto de zero. Bug identificado na validação de
-     2026-08: caiu no meio do caminho ao reescrever a partir da função
-     original `tendencia_emprego_renda`, que já tinha essa correção.
+  5. SEM renormalização por peso_total. Foi tentado (soma/peso_total) e
+     testado contra os 20 valores reais do Macroplan: piorou o ajuste
+     (MAE 0,108 -> 0,171), porque o piso de porte do item 3 zera vários
+     intervalos justamente nas atividades pequenas/voláteis que compõem a
+     amostra de teste, e dividir por um peso_total artificialmente baixo
+     amplifica o índice em vez de estabilizá-lo. A fórmula do Anexo (pág.
+     10) é uma soma de pesos fixos: um intervalo ausente ou abaixo do
+     piso contribui zero, não redistribui peso para os outros.
   6. Atividade que desaparece (vínculos caem a zero): a renda-hora fica
      indefinida (0/0), o que descartava o intervalo inteiro mesmo com
      Δemprego = -1 sendo um sinal válido e forte. Convenção adotada:
@@ -290,12 +292,18 @@ def calcular_tendencia_nivel(dados, min_vinculos_base=MIN_VINCULOS_BASE,
         .groupby(["id_municipio", "atividade"], as_index=False, observed=True)
         .agg(soma=("contrib", "sum"), peso_total=("peso_valido", "sum"))
     )
-    # Renormaliza pelo peso efetivamente válido: uma série com histórico
-    # incompleto (ex.: começa em 2018, sem os intervalos 2016-17/2017-18 do
-    # Anexo original) não pode ser penalizada só por ter menos anos.
-    out["tendencia_bruta"] = np.where(
-        out["peso_total"] > 0, out["soma"] / out["peso_total"], 0.0
-    )
+    # NÃO renormaliza por peso_total. Testado contra os 20 valores reais do
+    # Macroplan em 2026-08: a renormalização parecia mais "correta" no
+    # papel, mas piorou o ajuste (MAE 0,108 -> 0,171) porque o piso de
+    # porte (item 3, não faz parte da fórmula original) zera vários
+    # intervalos justamente nas atividades pequenas/voláteis que compõem
+    # a amostra de teste, e renormalizar por um peso_total artificialmente
+    # baixo amplifica o índice em vez de estabilizá-lo. A fórmula do Anexo
+    # (pág. 10) é uma soma de pesos fixos — um intervalo ausente ou abaixo
+    # do piso deve contribuir zero, não redistribuir peso para os outros.
+    # peso_total fica disponível para diagnóstico de cobertura (útil nos
+    # gates de elegibilidade), mas não entra no cálculo da tendência.
+    out["tendencia_bruta"] = out["soma"]
     out["tendencia_norm"] = out["tendencia_bruta"] / np.sqrt(2)
     return out[["id_municipio", "atividade", "tendencia_bruta", "tendencia_norm"]]
 
