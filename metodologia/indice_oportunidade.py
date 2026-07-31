@@ -4,7 +4,7 @@
 =============================================================================
 Consolida os pilares já validados (QL massa salarial, relevância, densidade,
 tendência composta, empreendedorismo) num Índice de Oportunidade único por
-nível de CNAE, aplica os filtros de elegibilidade, seleciona até 9
+nível de CNAE, aplica os filtros de elegibilidade, seleciona até TOP_N
 oportunidades por município (sem misturar níveis), categoriza e marca as
 seções produtivas — preenchendo os campos do painel "Mapeamento de
 oportunidades estratégicas" e "Detalhamento: oportunidades estratégicas
@@ -23,15 +23,37 @@ densidade (0,15), empreendedorismo (0,10). Geométrica, não aritmética: exige
 desempenho razoável em todas as dimensões, evita que relevância altíssima
 com especialização zero vire "oportunidade" sozinha.
 
-Seleção — "é oportunidade ou não": corte duplo (IV >= 0,35 E posição <= 9
-dentro do MESMO nível e MESMO município), depois dos filtros de porte
-(vínculos, estabelecimentos, relevância, QL mínimos). Um município pode ter
-zero oportunidades; nenhum passa de 9.
+Empreendedorismo (MEI) — tratamento especial: nem toda atividade tem perfil
+de MEI (indústria pesada, por exemplo, é estruturalmente incompatível — em
+muitos casos nem é elegível para MEI por lei). Penalizar uma vocação
+industrial forte por não ter MEI seria injusto. Por isso: se o total de
+MEIs de uma atividade em SP inteiro (soma de todos os municípios) for menor
+que MEI_MIN_TOTAL_ESTADO, o pilar de empreendedorismo é marcado como
+NÃO APLICÁVEL (NaN) para essa atividade em todo município — não como zero.
+Pilar ausente é excluído da média geométrica e os pesos dos outros 4 pilares
+são renormalizados proporcionalmente (mesma lógica de
+`metodologia_vocacoes_2025.py::indice_vocacao`, que a primeira versão deste
+arquivo tinha perdido ao reescrever — corrigido em 2026-08).
+
+Seleção — corte duplo, mas com registro do "quase":
+  1. Elegibilidade (gates de porte: vínculos, estabelecimentos, relevância, QL).
+  2. Posição <= TOP_N dentro do mesmo nível e mesmo município, entre as
+     elegíveis — SEMPRE calculada, mesmo se o IV não bate o mínimo. Isso
+     preenche as TOP_N caixas do painel mesmo quando o corte absoluto deixaria
+     alguma vazia.
+  3. Dentro do top-N, `status_oportunidade` distingue "Confirmada" (IV >=
+     IV_MINIMO) de "Potencial" (no top-N, elegível, mas abaixo do corte
+     absoluto) — o painel pode estilizar as duas de forma diferente em vez de
+     esconder a caixa.
+Um município pode ter zero oportunidades confirmadas; nenhum passa de TOP_N
+no total (confirmadas + potenciais).
 
 Categoria: quadro 2x2 do Anexo (QL massa x tendência de vínculos), aplicado
-só às atividades já selecionadas — mais os dois marcadores não-excludentes
-(empreendedorismo especializado, abertura líquida de estabelecimentos) que
-alimentam os blocos "Caracterização empresas"/"empreendedorismo" do painel.
+a QUALQUER atividade elegível (não só as do top-N) — é uma propriedade da
+atividade, não do corte de prioridade. Mais os dois marcadores
+não-excludentes (empreendedorismo especializado, abertura líquida de
+estabelecimentos) que alimentam os blocos "Caracterização
+empresas"/"empreendedorismo" do painel.
 
 Posição no município: ranking por IV, feito SEPARADAMENTE para cada um dos
 5 níveis — nunca misture posição de Grupo com posição de Classe (Anexo,
@@ -77,8 +99,10 @@ GATES = {
     "min_ql": 0.5,
 }
 IV_MINIMO = 0.35
-TOP_N = 9
+TOP_N = 6   # nº de caixas do painel "Mapeamento de oportunidades estratégicas"
 EPS = 0.01
+
+MEI_MIN_TOTAL_ESTADO = 10   # abaixo disso, empreendedorismo não é aplicável à atividade
 
 SECOES_PRODUTIVAS = ["A", "B", "C", "D", "E", "F", "H", "J", "Q"]
 
@@ -205,11 +229,27 @@ def pilar_empreendedorismo(ql_mei, tend_mei):
     return np.sqrt(e * t)
 
 
+def marcar_mei_aplicavel(df, minimo_estadual=MEI_MIN_TOTAL_ESTADO):
+    """Uma atividade só disputa o pilar de empreendedorismo se tiver MEI em
+    volume plausível em SP inteiro — evita punir vocação industrial forte só
+    por o setor ser estruturalmente incompatível com MEI."""
+    d = df.copy()
+    total_estado = d.groupby("atividade")["numero_de_meis"].transform("sum")
+    d["mei_aplicavel"] = total_estado >= minimo_estadual
+    return d
+
+
 # =============================================================================
 # 3. TENDÊNCIA COMPOSTA E ÍNDICE DE OPORTUNIDADE
 # =============================================================================
 
 def calcular_indice_oportunidade(df, pesos=PESOS_IV, eps=EPS):
+    """
+    Média geométrica ponderada. Pilar ausente (NaN) é excluído da conta e os
+    pesos dos demais são renormalizados — não é tratado como zero. Hoje só
+    pilar_empreendedorismo pode ficar NaN (ver marcar_mei_aplicavel), mas a
+    lógica é genérica para qualquer pilar futuro.
+    """
     d = df.copy()
 
     tend_composta = (
@@ -222,14 +262,16 @@ def calcular_indice_oportunidade(df, pesos=PESOS_IV, eps=EPS):
     d["pilar_densidade"] = pilar_densidade(d["densidade"])
     d["pilar_tendencia"] = pilar_tendencia(d["tendencia_composta"])
     d["pilar_empreendedorismo"] = pilar_empreendedorismo(d["QL_MEI"], d["tendencia_mei"])
+    d.loc[~d["mei_aplicavel"], "pilar_empreendedorismo"] = np.nan
 
     log_soma = np.zeros(len(d))
     peso_soma = np.zeros(len(d))
     for nome, w in pesos.items():
         v = pd.to_numeric(d[f"pilar_{nome}"], errors="coerce")
+        valido = v.notna().values
         v = v.fillna(eps).clip(eps, 1.0).values
-        log_soma += w * np.log(v)
-        peso_soma += w
+        log_soma += np.where(valido, w * np.log(v), 0.0)
+        peso_soma += np.where(valido, w, 0.0)
     d["indice_oportunidade"] = np.where(peso_soma > 0, np.exp(log_soma / peso_soma), 0.0)
     return d
 
@@ -249,37 +291,61 @@ def aplicar_gates(df, gates=GATES):
 
 
 # =============================================================================
-# 5. SELEÇÃO — corte duplo (IV mínimo + top 9), posição no município
+# 5. SELEÇÃO — top-N sempre preenchido, com status Confirmada/Potencial
 # =============================================================================
 
 def selecionar_oportunidades(df, iv_minimo=IV_MINIMO, top_n=TOP_N):
+    """
+    posicao_municipio é calculada para qualquer atividade elegível dentro do
+    top_n — não só as que passam do IV_MINIMO. Isso preenche as TOP_N caixas
+    do painel mesmo quando o corte absoluto deixaria alguma vazia.
+
+    status_oportunidade distingue, dentro do top_n:
+      "Confirmada" -> IV >= iv_minimo (oportunidade "de verdade")
+      "Potencial"  -> elegível e no top_n, mas abaixo do corte absoluto
+                      (ex.: município pequeno onde nada bate 0,35, mas ainda
+                      há uma atividade relativamente melhor que as outras)
+    e_oportunidade fica True só para "Confirmada" — mantém compatível com
+    quem já usa esse campo (ex.: categorizar()).
+    """
     d = df.copy()
     d["posicao_municipio"] = (
         d.where(d["elegivel"])
         .groupby("id_municipio", observed=True)["indice_oportunidade"]
         .rank(ascending=False, method="first")
     )
-    d["e_oportunidade"] = (
-        d["elegivel"] & (d["indice_oportunidade"] >= iv_minimo) & (d["posicao_municipio"] <= top_n)
-    )
-    d.loc[~d["e_oportunidade"], "posicao_municipio"] = np.nan
+
+    no_top_n = d["elegivel"] & (d["posicao_municipio"] <= top_n)
+    confirmada = no_top_n & (d["indice_oportunidade"] >= iv_minimo)
+    potencial = no_top_n & ~confirmada
+
+    d["status_oportunidade"] = np.select([confirmada, potencial], ["Confirmada", "Potencial"], default="")
+    d["e_oportunidade"] = confirmada
+    d.loc[~no_top_n, "posicao_municipio"] = np.nan
     return d
 
 
 # =============================================================================
-# 6. CATEGORIZAÇÃO — depois da seleção
+# 6. CATEGORIZAÇÃO — propriedade da atividade elegível, independe do top-N
 # =============================================================================
 
 def categorizar(df):
+    """
+    Baseado em `elegivel` (passou nos gates de porte), não em `e_oportunidade`
+    (top-N + IV mínimo) — a categoria descreve a atividade, o status de
+    Confirmada/Potencial descreve a prioridade dela no ranking. Uma atividade
+    pode ser "Vocação promissora" e ainda assim ficar fora do top-N do
+    município (perdeu de outras 6 melhores).
+    """
     d = df.copy()
     cond = [
-        (~d["e_oportunidade"]),
+        (~d["elegivel"]),
         (d["QL_massa"] > 1) & (d["tendencia_vinculos"] > 0),
         (d["QL_massa"] > 1) & (d["tendencia_vinculos"] <= 0),
         (d["QL_massa"] <= 1) & (d["QL_massa"] >= 0.5) & (d["tendencia_vinculos"] > 0),
     ]
     rotulo = [
-        "Não é oportunidade",
+        "Não elegível",
         "Vocação promissora",
         "Vocação sem crescimento",
         "Vocação potencial",
@@ -310,8 +376,10 @@ def marcar_produtiva(df, secoes=SECOES_PRODUTIVAS):
 # =============================================================================
 
 def montar_oportunidades(nivel, base_rais_completa, ano=2025,
-                          pesos=PESOS_IV, gates=GATES, iv_minimo=IV_MINIMO, top_n=TOP_N):
+                          pesos=PESOS_IV, gates=GATES, iv_minimo=IV_MINIMO, top_n=TOP_N,
+                          mei_min_total_estado=MEI_MIN_TOTAL_ESTADO):
     d = carregar_nivel(nivel, base_rais_completa, ano=ano)
+    d = marcar_mei_aplicavel(d, minimo_estadual=mei_min_total_estado)
     d = calcular_indice_oportunidade(d, pesos=pesos)
     d = aplicar_gates(d, gates=gates)
     d = selecionar_oportunidades(d, iv_minimo=iv_minimo, top_n=top_n)
@@ -336,19 +404,24 @@ def montar_todos_os_niveis(base_rais_completa, niveis=NIVEIS, ano=2025, prefixo=
 # =============================================================================
 
 def diagnostico(df, col_mun="id_municipio"):
-    """Alvo razoável: mediana entre 4 e 7 oportunidades por município, com
-    uma cauda de municípios sem nenhuma."""
-    op = df[df["e_oportunidade"]]
-    por_mun = op.groupby(col_mun, observed=True).size()
+    """Alvo razoável: mediana de Confirmadas entre a metade e o total do
+    TOP_N por município, com uma cauda de municípios sem nenhuma
+    confirmada (mas ainda com Potenciais preenchendo as caixas do painel)."""
+    conf = df[df["status_oportunidade"] == "Confirmada"]
+    pot = df[df["status_oportunidade"] == "Potencial"]
+    por_mun_conf = conf.groupby(col_mun, observed=True).size()
+    por_mun_top = df[df["status_oportunidade"] != ""].groupby(col_mun, observed=True).size()
     todos = df[col_mun].nunique()
 
-    print(f"Municípios na base .......................... {todos}")
-    print(f"Municípios com >= 1 oportunidade ............ {por_mun.size} ({por_mun.size/todos:.1%})")
-    print(f"Municípios sem nenhuma oportunidade .......... {todos - por_mun.size}")
-    print("\nOportunidades por município:")
-    print(por_mun.describe().round(2).to_string())
-    print("\nDistribuição por categoria:")
-    print(op["categoria_oportunidade"].value_counts().to_string())
+    print(f"Municípios na base .................................. {todos}")
+    print(f"Municípios com >= 1 Confirmada ...................... {por_mun_conf.size} ({por_mun_conf.size/todos:.1%})")
+    print(f"Municípios só com Potencial (nenhuma Confirmada) .... {por_mun_top.size - por_mun_conf.size}")
+    print(f"Municípios sem nada no top-N (nem Potencial) ........ {todos - por_mun_top.size}")
+    print("\nConfirmadas por município:")
+    print(por_mun_conf.describe().round(2).to_string())
+    print(f"\nTotal Confirmada: {len(conf):,} | Total Potencial: {len(pot):,}")
+    print("\nDistribuição por categoria (só elegíveis):")
+    print(df[df["elegivel"]]["categoria_oportunidade"].value_counts().to_string())
     return por_mun
 
 
