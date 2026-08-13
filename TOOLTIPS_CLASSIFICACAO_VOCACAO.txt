@@ -1,0 +1,169 @@
+================================================================================
+TOOLTIPS PARA CLASSIFICAÇÃO DE VOCAÇÃO TURÍSTICA
+Use esses textos no Power BI ao passar o mouse sobre o ícone "i"
+================================================================================
+
+1. MUNICÍPIO NÃO TURÍSTICO
+─────────────────────────────────────────────────────────────────────────────
+Score: 0.00
+
+Sem reconhecimento turístico institucional e sem oportunidade turística
+identificada pelos Diretores Regionais.
+
+Neste município:
+✗ Não integra o Mapa do Turismo Brasileiro
+✗ Sem MIT (Município de Interesse Turístico)
+✗ Sem Estância Turística
+✗ Sem oportunidade turística identificada
+
+Ação Recomendada:
+→ Pesquisa de mercado
+→ Levantamento de atrativos potenciais
+→ Avaliação de viabilidade turística
+
+─────────────────────────────────────────────────────────────────────────────
+
+
+2. VOCAÇÃO FRACA
+─────────────────────────────────────────────────────────────────────────────
+Score: 0.01 - 0.24
+
+Poucas evidências de vocação turística. Reconhecimento ou infraestrutura
+muito limitados.
+
+Neste município:
+○ Tem evidências turísticas apenas em 1-2 camadas
+○ Pode ter oportunidade identificada mas pouco reconhecimento
+○ Ou tem reconhecimento mas infraestrutura mínima
+○ Capacidade de atração baixa (regional ou nenhuma)
+
+Ação Recomendada:
+→ Diagnóstico qualitativo
+→ Prospecção de potencial
+→ Decisão sobre investimento
+
+─────────────────────────────────────────────────────────────────────────────
+
+
+3. VOCAÇÃO MODERADA
+─────────────────────────────────────────────────────────────────────────────
+Score: 0.25 - 0.49
+
+Potencial turístico identificado, mas ainda incipiente. Necessita
+desenvolvimento e estruturação.
+
+Neste município:
+○ Tem oportunidade turística identificada pelos Diretores
+○ E/OU tem algum reconhecimento (Mapa/MIT/Estância)
+○ Mas falta consolidação em várias frentes
+○ Capacidade de atração Regional ou Estadual
+
+Ação Recomendada:
+→ Diagnóstico detalhado de potencial
+→ Projeto-piloto de desenvolvimento
+→ Investimento faseado em infraestrutura
+→ Busca por reconhecimentos (Mapa/MIT)
+
+─────────────────────────────────────────────────────────────────────────────
+
+
+4. VOCAÇÃO FORTE
+─────────────────────────────────────────────────────────────────────────────
+Score: 0.50 - 0.74
+
+Vocação turística significativa e consolidada. Múltiplas evidências
+confirmam potencial turístico.
+
+Neste município:
+✓ Tem reconhecimento nacional (Mapa do Turismo)
+✓ Tem oportunidade turística identificada pelos Diretores
+○ Pode ter MIT/Estância ou infraestrutura consolidada
+○ Capacidade de atração Estadual ou Nacional
+
+Ação Recomendada:
+→ Qualificação de infraestrutura
+→ Formalização (buscar MIT/Estância se não tiver)
+→ Profissionalização do setor
+→ Marketing e posicionamento regional
+
+─────────────────────────────────────────────────────────────────────────────
+
+
+5. VOCAÇÃO MUITO FORTE
+─────────────────────────────────────────────────────────────────────────────
+Score: 0.75 - 1.00
+
+Vocação turística consolidada. Múltiplas camadas de reconhecimento confirmam
+destino turístico de verdade.
+
+Neste município:
+✓ Tem reconhecimento nacional (Mapa como Turístico)
+✓ Tem reconhecimento estadual (MIT e/ou Estância)
+✓ Tem oportunidade turística identificada
+✓ Infraestrutura consolidada
+✓ Capacidade de atração Nacional ou Internacional
+
+Ação Recomendada:
+→ Consolidação e expansão
+→ Qualificação de serviços
+→ Posicionamento estadual/nacional de marca
+→ Inovação e diferenciação
+→ Monitoramento de competitividade
+
+─────────────────────────────────────────────────────────────────────────────
+
+
+LEGENDA DAS CAMADAS QUE COMPÕEM O SCORE
+─────────────────────────────────────────────────────────────────────────────
+
+Camada 1 - Reconhecimento Nacional (MTur)
+  Município Turístico (3 pts) | Oferta Complementar (2 pts) |
+  Apoio ao Turismo (1 pt) | Fora do Mapa (0 pts)
+
+Camada 2 - Reconhecimento Estadual
+  Estância Turística (3 pts) | MIT (2 pts) | Nenhum (0 pts)
+
+Camada 3 - Oportunidade Turística (Diretores)
+  Com oportunidade (2 pts) | Sem oportunidade (0 pts)
+
+Camada 4 - Capacidade de Atração
+  Internacional (4 pts) | Nacional (3 pts) | Estadual (2 pts) |
+  Regional (1 pt) | Não há (0 pts)
+
+─────────────────────────────────────────────────────────────────────────────
+
+
+COMO USAR NO POWER BI
+─────────────────────────────────────────────────────────────────────────────
+
+1. Insira o ícone "i" (usar arquivo: icon_info_classificacao.svg)
+2. Configure tooltip (Dicas de Ferramentas) com o texto acima
+3. Use a coluna "Classificacao_Vocacao_Turistica" como base
+4. Exemplo em Power BI:
+
+   - Adicionar imagem do ícone SVG
+   - Selecionar "Dica de Ferramenta"
+   - Vincular ao campo "Classificacao_Vocacao_Turistica"
+   - Ou criar campo calculado que retorna o texto baseado no valor
+
+5. Campo calculado DAX (opcional):
+   Tooltip_Classificacao =
+   SWITCH([Classificacao_Vocacao_Turistica],
+     "Município Não Turístico", "[Texto 1 acima]",
+     "Vocação Fraca", "[Texto 2 acima]",
+     "Vocação Moderada", "[Texto 3 acima]",
+     "Vocação Forte", "[Texto 4 acima]",
+     "Vocação Muito Forte", "[Texto 5 acima]",
+     "Não disponível")
+
+─────────────────────────────────────────────────────────────────────────────
+
+
+VERSÃO
+─────────────────────────────────────────────────────────────────────────────
+Score de Vocação Turística - v2
+Baseado em: 4 Camadas de Evidência
+Total Máximo: 12 pontos
+Data: Agosto 2026
+
+================================================================================
