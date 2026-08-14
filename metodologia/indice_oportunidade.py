@@ -1,14 +1,23 @@
 """
 =============================================================================
-ÍNDICE DE OPORTUNIDADE, CATEGORIA E POSIÇÃO NO MUNICÍPIO
+ÍNDICE DE ADERÊNCIA ECONÔMICA, CATEGORIA E POSIÇÃO NO MUNICÍPIO
 =============================================================================
 Consolida os pilares já validados (QL massa salarial, relevância, densidade,
-tendência composta, empreendedorismo) num Índice de Oportunidade único por
-nível de CNAE, aplica os filtros de elegibilidade, monta um ranking GERAL
-por município (sem misturar níveis, sem limite de tamanho), categoriza e
-marca as seções produtivas — preenchendo os campos do painel "Mapeamento de
-oportunidades estratégicas" e "Detalhamento: oportunidades estratégicas
-produtivas", exceto a caixa de oportunidade turística.
+tendência composta, empreendedorismo) num Índice de Aderência Econômica
+único por nível de CNAE, aplica os filtros de elegibilidade, monta um
+ranking GERAL por município (sem misturar níveis, sem limite de tamanho),
+categoriza e marca as seções produtivas — preenchendo os campos do painel
+"Mapeamento de oportunidades estratégicas" e "Detalhamento: oportunidades
+estratégicas produtivas", exceto a caixa de oportunidade turística.
+
+O nome do índice mudou de "Índice de Oportunidade" para "Índice de
+Aderência Econômica" em 2026-08, a pedido do usuário: mede o quanto uma
+atividade combina com o perfil econômico já existente no município
+(especialização + relevância + tendência + densidade), não uma promessa de
+mercado — "oportunidade" segue existindo só como conceito do painel
+(categoria_oportunidade, exibir_mapeamento, montar_oportunidades), não como
+nome do índice em si. A palavra "vocação" foi descartada explicitamente
+pelo usuário como alternativa.
 
 Reaproveita tudo que já foi validado nas etapas anteriores:
   - tendencia_vinculos.py: QL oficial (massa salarial) e tendência de vínculos
@@ -17,7 +26,7 @@ Reaproveita tudo que já foi validado nas etapas anteriores:
   - densidade_{nivel}.xlsx / densidade_classe_corrigida.xlsx: densidade validada
   - renda_vinculos_relevancia_{nivel}_2025.xlsx: vínculos, renda média, relevância
 
-Índice de Oportunidade (IV) = núcleo + bônus:
+Índice de Aderência Econômica (IAE) = núcleo + bônus:
 
   núcleo = média geométrica ponderada de 4 pilares em [0,1] — especialização
            (0,30), relevância (0,25), tendência (0,20), densidade (0,15).
@@ -49,7 +58,7 @@ pedido do usuário: "a classificação precisa ser geral, os 6 eu preciso só
 naquela parte do mapeamento"):
   1. Elegibilidade (gates de porte: vínculos, estabelecimentos, relevância, QL).
   2. `posicao_municipio`: ranking 1..N sobre TODAS as atividades do
-     município com índice_oportunidade > 0, elegíveis ou não (mudou de novo
+     município com indice_aderencia_economica > 0, elegíveis ou não (mudou de novo
      em 2026-08, a pedido do usuário: "nos casos em que o índice seja maior
      que 0, haja uma posição entre todas as atividades de cada nível") — uma
      atividade com sinal positivo mas que não passou nos gates de porte
@@ -74,7 +83,7 @@ não-excludentes (empreendedorismo especializado, abertura líquida de
 estabelecimentos) que alimentam os blocos "Caracterização
 empresas"/"empreendedorismo" do painel.
 
-Posição no município: ranking por IV, feito SEPARADAMENTE para cada um dos
+Posição no município: ranking por IAE, feito SEPARADAMENTE para cada um dos
 5 níveis — nunca misture posição de Grupo com posição de Classe (Anexo,
 seção 7 da nota metodológica).
 
@@ -253,7 +262,7 @@ def pilar_empreendedorismo(ql_mei, tend_mei):
 
 
 def marcar_mei_aplicavel(df, minimo_estadual=MEI_MIN_TOTAL_ESTADO):
-    """Filtro de ruído: com o bônus aditivo (ver calcular_indice_oportunidade)
+    """Filtro de ruído: com o bônus aditivo (ver calcular_indice_aderencia_economica)
     a ausência de MEI já não penaliza nada, então isso não protege mais
     contra punição — protege contra RECOMPENSA espúria (2-3 MEIs por acaso
     gerando um QL_MEI enorme e um bônus artificial)."""
@@ -264,11 +273,11 @@ def marcar_mei_aplicavel(df, minimo_estadual=MEI_MIN_TOTAL_ESTADO):
 
 
 # =============================================================================
-# 3. TENDÊNCIA COMPOSTA E ÍNDICE DE OPORTUNIDADE
+# 3. TENDÊNCIA COMPOSTA E ÍNDICE DE ADERÊNCIA ECONÔMICA
 # =============================================================================
 
-def calcular_indice_oportunidade(df, pesos_nucleo=PESOS_NUCLEO,
-                                  peso_bonus_empreendedorismo=PESO_BONUS_EMPREENDEDORISMO, eps=EPS):
+def calcular_indice_aderencia_economica(df, pesos_nucleo=PESOS_NUCLEO,
+                                         peso_bonus_empreendedorismo=PESO_BONUS_EMPREENDEDORISMO, eps=EPS):
     """
     índice = núcleo (média geométrica de especialização/relevância/tendência/
     densidade) + bônus de empreendedorismo (aditivo, 0 a peso_bonus, nunca
@@ -306,7 +315,7 @@ def calcular_indice_oportunidade(df, pesos_nucleo=PESOS_NUCLEO,
     d["indice_nucleo"] = np.where(peso_soma > 0, np.exp(log_soma / peso_soma), 0.0)
 
     d["bonus_empreendedorismo"] = peso_bonus_empreendedorismo * d["pilar_empreendedorismo"]
-    d["indice_oportunidade"] = (d["indice_nucleo"] + d["bonus_empreendedorismo"]).clip(0, 1)
+    d["indice_aderencia_economica"] = (d["indice_nucleo"] + d["bonus_empreendedorismo"]).clip(0, 1)
     return d
 
 
@@ -331,14 +340,15 @@ def aplicar_gates(df, gates=GATES):
 def selecionar_oportunidades(df, top_n=TOP_N):
     """
     posicao_municipio é um ranking GERAL — 1..N sobre TODAS as atividades do
-    município com indice_oportunidade > 0, elegíveis ou não, sem limite de
-    tamanho. O corte de TOP_N não vive aqui: é um filtro de exibição (a tela
-    de Mapeamento, que só tem TOP_N caixas), não uma restrição da base de
-    dados (decidido em 2026-08, a pedido do usuário: "a classificação
-    precisa ser geral, os 6 eu preciso só naquela parte do mapeamento").
+    município com indice_aderencia_economica > 0, elegíveis ou não, sem
+    limite de tamanho. O corte de TOP_N não vive aqui: é um filtro de
+    exibição (a tela de Mapeamento, que só tem TOP_N caixas), não uma
+    restrição da base de dados (decidido em 2026-08, a pedido do usuário:
+    "a classificação precisa ser geral, os 6 eu preciso só naquela parte do
+    mapeamento").
 
-    A base do ranking é `indice_oportunidade > 0`, não `elegivel` — uma
-    atividade pode ter índice positivo e ainda não passar nos gates de
+    A base do ranking é `indice_aderencia_economica > 0`, não `elegivel` —
+    uma atividade pode ter índice positivo e ainda não passar nos gates de
     porte; antes ela ficava sem posição nenhuma (NaN), agora entra no
     ranking geral como qualquer outra (mudou em 2026-08, a pedido do
     usuário: "nos casos em que o índice seja maior que 0, haja uma posição
@@ -357,8 +367,8 @@ def selecionar_oportunidades(df, top_n=TOP_N):
     """
     d = df.copy()
     d["posicao_municipio"] = (
-        d.where(d["indice_oportunidade"] > 0)
-        .groupby("id_municipio", observed=True)["indice_oportunidade"]
+        d.where(d["indice_aderencia_economica"] > 0)
+        .groupby("id_municipio", observed=True)["indice_aderencia_economica"]
         .rank(ascending=False, method="first")
     )
     d["exibir_mapeamento"] = d["elegivel"] & (d["posicao_municipio"] <= top_n)
@@ -424,13 +434,13 @@ def montar_oportunidades(nivel, base_rais_completa, ano=2025,
                           mei_min_total_estado=MEI_MIN_TOTAL_ESTADO):
     d = carregar_nivel(nivel, base_rais_completa, ano=ano)
     d = marcar_mei_aplicavel(d, minimo_estadual=mei_min_total_estado)
-    d = calcular_indice_oportunidade(d, pesos_nucleo=pesos_nucleo,
-                                      peso_bonus_empreendedorismo=peso_bonus_empreendedorismo)
+    d = calcular_indice_aderencia_economica(d, pesos_nucleo=pesos_nucleo,
+                                             peso_bonus_empreendedorismo=peso_bonus_empreendedorismo)
     d = aplicar_gates(d, gates=gates)
     d = selecionar_oportunidades(d, top_n=top_n)
     d = categorizar(d)
     d = marcar_produtiva(d)
-    return d.sort_values(["id_municipio", "indice_oportunidade"], ascending=[True, False])
+    return d.sort_values(["id_municipio", "indice_aderencia_economica"], ascending=[True, False])
 
 
 def montar_todos_os_niveis(base_rais_completa, niveis=NIVEIS, ano=2025, prefixo="oportunidades_sp"):
