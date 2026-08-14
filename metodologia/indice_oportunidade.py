@@ -53,17 +53,19 @@ naquela parte do mapeamento"):
      em 2026-08, a pedido do usuário: "nos casos em que o índice seja maior
      que 0, haja uma posição entre todas as atividades de cada nível") — uma
      atividade com sinal positivo mas que não passou nos gates de porte
-     (base pequena demais para ser levada a sério como Confirmada/Potencial)
-     ainda ganha uma posição no ranking, só não vira status_oportunidade.
-  3. `status_oportunidade` distingue, sobre TODAS as elegíveis: "Confirmada"
-     (IV >= IV_MINIMO) de "Potencial" (elegível, abaixo do corte absoluto) —
-     sem limite de posição também.
-  4. `exibir_mapeamento`: True só para Confirmada dentro das TOP_N posições —
-     é o filtro que a tela de Mapeamento usa pra decidir quais das 6 caixas
-     preencher. Não limita a base, só marca o que aparece naquela tela
-     específica.
-Um município pode ter zero oportunidades confirmadas; o ranking geral não
-tem teto, só `exibir_mapeamento` tem.
+     ainda ganha uma posição no ranking, só não fica elegível.
+  3. `exibir_mapeamento`: True só para atividades elegíveis dentro das TOP_N
+     posições — é o filtro que a tela de Mapeamento usa pra decidir quais
+     das 6 caixas preencher. Não limita a base, só marca o que aparece
+     naquela tela específica.
+Um município pode ter zero atividades elegíveis; o ranking geral não tem
+teto, só `exibir_mapeamento` tem.
+
+`status_oportunidade` (Confirmada/Potencial) e `e_oportunidade` foram
+REMOVIDOS em 2026-08 a pedido do usuário — variáveis demais para o uso real
+do painel, sem necessidade de uma segunda camada de corte além de
+`elegivel` (gates) e `categoria_oportunidade` (seção de categorização,
+abaixo). `IV_MINIMO` deixou de existir por causa disso.
 
 Categoria: quadro 2x2 do Anexo (QL massa x tendência de vínculos), aplicado
 a QUALQUER atividade elegível (não só as do top-N) — é uma propriedade da
@@ -77,8 +79,8 @@ Posição no município: ranking por IV, feito SEPARADAMENTE para cada um dos
 seção 7 da nota metodológica).
 
 Ordem de execução: montar_todos_os_niveis(base_rais_completa) -> ajuste
-IV_MINIMO/GATES com diagnostico() se a mediana de oportunidades por
-município fugir de 4-7.
+GATES com diagnostico() se a mediana de atividades elegíveis por município
+fugir de 4-7.
 =============================================================================
 """
 
@@ -120,7 +122,6 @@ GATES = {
     "min_relevancia": 0.005,
     "min_ql": 0.5,
 }
-IV_MINIMO = 0.35
 TOP_N = 6   # nº de caixas do painel "Mapeamento de oportunidades estratégicas"
 EPS = 0.01
 
@@ -324,36 +325,35 @@ def aplicar_gates(df, gates=GATES):
 
 
 # =============================================================================
-# 5. SELEÇÃO — top-N sempre preenchido, com status Confirmada/Potencial
+# 5. SELEÇÃO — ranking geral + filtro de exibição do Mapeamento
 # =============================================================================
 
-def selecionar_oportunidades(df, iv_minimo=IV_MINIMO, top_n=TOP_N):
+def selecionar_oportunidades(df, top_n=TOP_N):
     """
     posicao_municipio é um ranking GERAL — 1..N sobre TODAS as atividades do
     município com indice_oportunidade > 0, elegíveis ou não, sem limite de
-    tamanho. O corte de TOP_N não vive mais aqui: é um filtro de exibição (a
-    tela de Mapeamento, que só tem TOP_N caixas), não uma restrição da base
-    de dados. Isso decidido em 2026-08 depois de o usuário apontar que a
-    classificação precisa ser geral — o "6" é só daquela tela.
+    tamanho. O corte de TOP_N não vive aqui: é um filtro de exibição (a tela
+    de Mapeamento, que só tem TOP_N caixas), não uma restrição da base de
+    dados (decidido em 2026-08, a pedido do usuário: "a classificação
+    precisa ser geral, os 6 eu preciso só naquela parte do mapeamento").
 
-    A base do ranking é `indice_oportunidade > 0`, não `elegivel` (mudou de
-    novo em 2026-08, a pedido do usuário: "nos casos em que o índice seja
-    maior que 0, haja uma posição entre todas as atividades de cada nível")
-    — uma atividade pode ter índice positivo e ainda não passar nos gates de
-    porte (base pequena demais pra virar Confirmada/Potencial); antes ela
-    ficava sem posição nenhuma (NaN), agora entra no ranking geral como
-    qualquer outra. `elegivel` continua sendo o que decide status_oportunidade
-    logo abaixo — não vira elegível só por ter posição.
-
-    status_oportunidade, sobre TODAS as elegíveis (sem limite de posição):
-      "Confirmada" -> IV >= iv_minimo (oportunidade "de verdade")
-      "Potencial"  -> elegível, mas abaixo do corte absoluto de IV
-    e_oportunidade fica True só para "Confirmada" — mantém compatível com
-    quem já usa esse campo (ex.: categorizar()).
+    A base do ranking é `indice_oportunidade > 0`, não `elegivel` — uma
+    atividade pode ter índice positivo e ainda não passar nos gates de
+    porte; antes ela ficava sem posição nenhuma (NaN), agora entra no
+    ranking geral como qualquer outra (mudou em 2026-08, a pedido do
+    usuário: "nos casos em que o índice seja maior que 0, haja uma posição
+    entre todas as atividades de cada nível").
 
     exibir_mapeamento: conveniência para a tela de Mapeamento no Power BI —
-    True só para Confirmada dentro das top_n posições do município. Filtra
-    só a visual das TOP_N caixas; não afeta posicao_municipio nem status.
+    True só para atividades elegíveis dentro das top_n posições do
+    município. Filtra só a visual das TOP_N caixas; não afeta
+    posicao_municipio.
+
+    status_oportunidade (Confirmada/Potencial) e e_oportunidade foram
+    REMOVIDOS em 2026-08 a pedido do usuário — variáveis demais para o uso
+    real do painel. `elegivel` (gates de porte, seção 4) e
+    `categoria_oportunidade` (categorizar(), seção 6) já cobrem a
+    distinção que interessa.
     """
     d = df.copy()
     d["posicao_municipio"] = (
@@ -361,13 +361,7 @@ def selecionar_oportunidades(df, iv_minimo=IV_MINIMO, top_n=TOP_N):
         .groupby("id_municipio", observed=True)["indice_oportunidade"]
         .rank(ascending=False, method="first")
     )
-
-    confirmada = d["elegivel"] & (d["indice_oportunidade"] >= iv_minimo)
-    potencial = d["elegivel"] & ~confirmada
-
-    d["status_oportunidade"] = np.select([confirmada, potencial], ["Confirmada", "Potencial"], default="")
-    d["e_oportunidade"] = confirmada
-    d["exibir_mapeamento"] = confirmada & (d["posicao_municipio"] <= top_n)
+    d["exibir_mapeamento"] = d["elegivel"] & (d["posicao_municipio"] <= top_n)
     return d
 
 
@@ -377,11 +371,10 @@ def selecionar_oportunidades(df, iv_minimo=IV_MINIMO, top_n=TOP_N):
 
 def categorizar(df):
     """
-    Baseado em `elegivel` (passou nos gates de porte), não em `e_oportunidade`
-    (top-N + IV mínimo) — a categoria descreve a atividade, o status de
-    Confirmada/Potencial descreve a prioridade dela no ranking. Uma atividade
-    pode ser "Oportunidade promissora" e ainda assim ficar fora do top-N do
-    município (perdeu de outras 6 melhores).
+    Baseado em `elegivel` (passou nos gates de porte) — a categoria descreve
+    a atividade, independente da posição dela no ranking. Uma atividade pode
+    ser "Oportunidade promissora" e ainda assim ficar fora do top-N do
+    município (perdeu de outras 6 melhores em posicao_municipio).
 
     Rótulos usam "Oportunidade", não "Vocação" — alinhado com o nome do
     painel ("Mapeamento de Oportunidades Estratégicas") e com o pedido do
@@ -427,14 +420,14 @@ def marcar_produtiva(df, secoes=SECOES_PRODUTIVAS):
 
 def montar_oportunidades(nivel, base_rais_completa, ano=2025,
                           pesos_nucleo=PESOS_NUCLEO, peso_bonus_empreendedorismo=PESO_BONUS_EMPREENDEDORISMO,
-                          gates=GATES, iv_minimo=IV_MINIMO, top_n=TOP_N,
+                          gates=GATES, top_n=TOP_N,
                           mei_min_total_estado=MEI_MIN_TOTAL_ESTADO):
     d = carregar_nivel(nivel, base_rais_completa, ano=ano)
     d = marcar_mei_aplicavel(d, minimo_estadual=mei_min_total_estado)
     d = calcular_indice_oportunidade(d, pesos_nucleo=pesos_nucleo,
                                       peso_bonus_empreendedorismo=peso_bonus_empreendedorismo)
     d = aplicar_gates(d, gates=gates)
-    d = selecionar_oportunidades(d, iv_minimo=iv_minimo, top_n=top_n)
+    d = selecionar_oportunidades(d, top_n=top_n)
     d = categorizar(d)
     d = marcar_produtiva(d)
     return d.sort_values(["id_municipio", "indice_oportunidade"], ascending=[True, False])
@@ -452,36 +445,32 @@ def montar_todos_os_niveis(base_rais_completa, niveis=NIVEIS, ano=2025, prefixo=
 
 
 # =============================================================================
-# 8. DIAGNÓSTICO — para calibrar IV_MINIMO e os gates
+# 8. DIAGNÓSTICO — para calibrar os gates
 # =============================================================================
 
 def diagnostico(df, col_mun="id_municipio"):
     """
-    Confirmadas/Potenciais agora são contagens GERAIS (sem teto de TOP_N) —
-    um município pode ter, por exemplo, 40 Confirmadas se realmente tiver
-    40 atividades elegíveis acima do IV_MINIMO. `exibir_mapeamento` é a
-    métrica que importa para a tela de Mapeamento especificamente (quantas
-    das TOP_N caixas cada município preenche).
+    Sem status_oportunidade (Confirmada/Potencial) — removido em 2026-08 a
+    pedido do usuário. `elegivel` (gates de porte, sem teto) e
+    `exibir_mapeamento` (elegível + teto TOP_N, para a tela de Mapeamento)
+    são as duas métricas de referência para calibrar GATES.
     """
-    conf = df[df["status_oportunidade"] == "Confirmada"]
-    pot = df[df["status_oportunidade"] == "Potencial"]
-    por_mun_conf = conf.groupby(col_mun, observed=True).size()
-    por_mun_top = df[df["status_oportunidade"] != ""].groupby(col_mun, observed=True).size()
+    eleg = df[df["elegivel"]]
+    por_mun_eleg = eleg.groupby(col_mun, observed=True).size()
     por_mun_mapa = df[df["exibir_mapeamento"]].groupby(col_mun, observed=True).size()
     todos = df[col_mun].nunique()
 
     print(f"Municípios na base .................................. {todos}")
-    print(f"Municípios com >= 1 Confirmada ...................... {por_mun_conf.size} ({por_mun_conf.size/todos:.1%})")
-    print(f"Municípios só com Potencial (nenhuma Confirmada) .... {por_mun_top.size - por_mun_conf.size}")
-    print(f"Municípios sem nada elegível (nem Potencial) ........ {todos - por_mun_top.size}")
-    print("\nConfirmadas por município (ranking geral, sem teto):")
-    print(por_mun_conf.describe().round(2).to_string())
+    print(f"Municípios com >= 1 atividade elegível .............. {por_mun_eleg.size} ({por_mun_eleg.size/todos:.1%})")
+    print(f"Municípios sem nada elegível ......................... {todos - por_mun_eleg.size}")
+    print("\nAtividades elegíveis por município (ranking geral, sem teto):")
+    print(por_mun_eleg.describe().round(2).to_string())
     print("\nCaixas preenchidas na tela de Mapeamento (exibir_mapeamento, teto TOP_N):")
     print(por_mun_mapa.describe().round(2).to_string())
-    print(f"\nTotal Confirmada: {len(conf):,} | Total Potencial: {len(pot):,}")
+    print(f"\nTotal de atividades elegíveis: {len(eleg):,}")
     print("\nDistribuição por categoria (só elegíveis):")
-    print(df[df["elegivel"]]["categoria_oportunidade"].value_counts().to_string())
-    return por_mun_conf
+    print(eleg["categoria_oportunidade"].value_counts().to_string())
+    return por_mun_eleg
 
 
 if __name__ == "__main__":
