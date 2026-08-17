@@ -77,11 +77,13 @@ do painel, sem necessidade de uma segunda camada de corte além de
 abaixo). `IV_MINIMO` deixou de existir por causa disso.
 
 Categoria: quadro 2x2 do Anexo (QL massa x tendência de vínculos), aplicado
-a QUALQUER atividade elegível (não só as do top-N) — é uma propriedade da
-atividade, não do corte de prioridade. Mais os dois marcadores
-não-excludentes (empreendedorismo especializado, abertura líquida de
-estabelecimentos) que alimentam os blocos "Caracterização
-empresas"/"empreendedorismo" do painel.
+a QUALQUER atividade — não depende de `elegivel` (removido em 2026-08, ver
+categorizar()) nem de posição no ranking; é uma propriedade da atividade em
+si. Mais os dois marcadores (empreendedorismo, empresarial), cada um com o
+mesmo quadro 2x2 de especialização x crescimento ("Especializado com
+crescimento" / "Especializado sem crescimento" / "Não especializado com
+crescimento" / "Não especializado sem crescimento"), que alimentam os
+blocos "Caracterização empresas"/"empreendedorismo" do painel.
 
 Posição no município: ranking por IAE, feito SEPARADAMENTE para cada um dos
 5 níveis — nunca misture posição de Grupo com posição de Classe (Anexo,
@@ -379,41 +381,59 @@ def selecionar_oportunidades(df, top_n=TOP_N):
 # 6. CATEGORIZAÇÃO — propriedade da atividade elegível, independe do top-N
 # =============================================================================
 
+def _classificar_especializacao_crescimento(ql, tendencia):
+    """
+    Quadro 2x2 genérico (especialização x crescimento), reaproveitado pelos
+    dois marcadores (empreendedorismo e empresarial) — mesma régua, duas
+    fontes de dado diferentes (QL_MEI/tendencia_mei e
+    QL_estabelecimentos/tendencia_estabelecimentos). Pedido do usuário em
+    2026-08: nomenclatura padronizada, sem string vazia para o caso "nem
+    especializado nem em crescimento" (antes ficava "").
+    """
+    especializado = ql > 1
+    crescimento = tendencia > 0
+    cond = [especializado & crescimento, especializado & ~crescimento, ~especializado & crescimento]
+    rotulo = ["Especializado com crescimento", "Especializado sem crescimento", "Não especializado com crescimento"]
+    return np.select(cond, rotulo, default="Não especializado sem crescimento")
+
+
 def categorizar(df):
     """
-    Baseado em `elegivel` (passou nos gates de porte) — a categoria descreve
-    a atividade, independente da posição dela no ranking. Uma atividade pode
-    ser "Oportunidade promissora" e ainda assim ficar fora do top-N do
-    município (perdeu de outras 6 melhores em posicao_municipio).
+    Categoria = só o quadro QL massa x tendência de vínculos, SEM override
+    de `elegivel` (mudou em 2026-08, a pedido do usuário, depois de achar
+    inconsistência real: em municípios pequenos, boa parte do que caía em
+    "Não elegível" tinha QL_massa > 1 — ou seja, era especialização relativa
+    genuína, barrada só pelo piso absoluto de estabelecimentos/vínculos, não
+    porque a atividade fosse irrelevante para aquele município). `elegivel`
+    continua existindo e sendo usado em `exibir_mapeamento` — a tela de
+    Mapeamento continua mais conservadora de propósito, mas a categoria (que
+    descreve a atividade em qualquer lugar do painel) não deve mais escondida
+    atrás de um piso de porte pensado para municípios grandes.
 
     Rótulos usam "Oportunidade", não "Vocação" — alinhado com o nome do
     painel ("Mapeamento de Oportunidades Estratégicas") e com o pedido do
     usuário em 2026-08 de padronizar a terminologia.
+
+    marcador_empreendedorismo e marcador_empresarial usam o mesmo quadro 2x2
+    (especialização x crescimento) — QL_MEI/tendencia_mei para o primeiro,
+    QL_estabelecimentos/tendencia_estabelecimentos para o segundo.
     """
     d = df.copy()
     cond = [
-        (~d["elegivel"]),
         (d["QL_massa"] > 1) & (d["tendencia_vinculos"] > 0),
         (d["QL_massa"] > 1) & (d["tendencia_vinculos"] <= 0),
         (d["QL_massa"] <= 1) & (d["QL_massa"] >= 0.5) & (d["tendencia_vinculos"] > 0),
     ]
     rotulo = [
-        "Não elegível",
         "Oportunidade promissora",
         "Oportunidade sem crescimento",
         "Oportunidade potencial",
     ]
     d["categoria_oportunidade"] = np.select(cond, rotulo, default="Sem classificação")
 
-    d["marcador_empreendedorismo"] = np.where(
-        d["QL_MEI"] > 1,
-        np.where(d["tendencia_mei"] > 0,
-                 "Empreendedorismo especializado e em expansão",
-                 "Empreendedorismo especializado"),
-        "",
-    )
-    d["marcador_empresarial"] = np.where(
-        d["tendencia_estabelecimentos"] > 0, "Abertura líquida de estabelecimentos", ""
+    d["marcador_empreendedorismo"] = _classificar_especializacao_crescimento(d["QL_MEI"], d["tendencia_mei"])
+    d["marcador_empresarial"] = _classificar_especializacao_crescimento(
+        d["QL_estabelecimentos"], d["tendencia_estabelecimentos"]
     )
     return d
 
