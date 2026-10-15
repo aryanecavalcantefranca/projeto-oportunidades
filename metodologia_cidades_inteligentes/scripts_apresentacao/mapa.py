@@ -7,7 +7,7 @@ sys.path.insert(0, "/home/user/projeto-oportunidades/metodologia_cidades_intelig
 import pipeline as p
 
 P = "/tmp/claude-0/-home-user-projeto-oportunidades/400bee1b-8845-51fa-ac8a-89e34a1e2071/scratchpad/ppt/"
-COR = {"A": "#F99828", "B": "#263253", "C": "#4496CD", "D": "#EA3234"}
+COR = {"A": "#F99828", "B": "#263253", "C": "#4496CD", "D": "#9D4EDD"}
 W, H = 11692, 8267
 BBOX = (245, 590, 11486, 7543)  # área do mapa na imagem original (px)
 
