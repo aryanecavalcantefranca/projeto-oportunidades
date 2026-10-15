@@ -7,7 +7,7 @@ Anexo III do Edital de Chamamento Público – Cidades Inteligentes.
 Tudo aqui é reproduzível com `python pipeline.py` (gera os arquivos de `resultados/`).
 A reprodução da versão original bate exatamente com o notebook
 (181 / 145 / 78 / 240 municípios, mesmos centroides e silhueta 0,312) e com os
-dois arquivos entregues (mesmo IAP, mesma distância e mesmos rankings).
+dois arquivos entregues (mesmos perfis, IAP, distância e rankings).
 
 ---
 
@@ -37,81 +37,85 @@ Ou seja, hoje o IMD ganha ~6 p.p. e o socioeconômico perde ~7 p.p. em relação
 que o Anexo III afirma ("a influência de cada eixo na formação dos perfis passou a
 refletir a ponderação estabelecida").
 
-## 2. Achado importante: as letras dos perfis nos arquivos entregues estão trocadas
+## 2. Nomenclatura dos perfis e vagas
 
-Os arquivos `Ranking_IAP_*_2.xlsx` **não** seguem a Tabela 1 do Anexo III.
-Comparando os centroides de cada letra do arquivo com a definição do edital:
+Os perfis seguem a nomenclatura dos arquivos de trabalho (`Ranking_IAP_*_2.xlsx`),
+que **difere da Tabela 1 do Anexo III**:
 
-| Letra no arquivo | Centroide (CIF, IMD, CSE) | Corresponde no Anexo III a | Fórmula de IAP efetivamente usada |
-|---|---|---|---|
-| A | (−0,36; −0,26; −0,13) – tudo abaixo | **B** | IAP_B |
-| B | (+0,09; −0,25; −0,08) | **D** | IAP_D |
-| C | (−0,12; +0,48; +0,20) | **A** | IAP_A |
-| D | (+0,66; +0,14; +0,03) | **C** | IAP_C |
+| Perfil (arquivos) | CIF | IMD | CSE | Equivalente na Tabela 1 do Anexo III | IAP |
+|---|---|---|---|---|---|
+| A | abaixo | abaixo | abaixo | B | −CIF − IMD − CSE |
+| B | acima | abaixo | abaixo | D | CIF − IMD − CSE |
+| C | abaixo | acima | acima | A | −CIF + IMD + CSE |
+| D | acima | acima | acima | C | CIF + IMD + CSE |
 
-O IAP de cada município foi calculado com a fórmula certa para o formato do grupo
-(as equações estão amarradas ao número do cluster), mas a **letra exportada** está
-errada. Consequência prática: aplicar as vagas do item 5.1.3 (A=13, B=12, C=10,
-D=15) sobre esses arquivos seleciona, por exemplo, 13 municípios do grupo "tudo
-abaixo da média" no lugar do Perfil A. A distribuição de vagas só é coerente com a
-nomenclatura do Anexo III (A=181, B=145, C=78, D=240 municípios).
+A letra é atribuída automaticamente pelo **padrão de sinais** do centroide
+(atribuição ótima pelo método húngaro), e não por um mapeamento fixo do número do
+cluster (`{1:"A", 3:"B", 2:"C", 0:"D"}` no notebook). O número que o K-Means dá a
+cada cluster é arbitrário e pode mudar com a versão do scikit-learn ou com a
+reexecução de células; o critério por sinais garante a mesma letra sempre.
 
-Causa: o mapeamento é fixo (`{1:"A", 3:"B", 2:"C", 0:"D"}`), mas o número que o
-K-Means dá a cada cluster é arbitrário e pode mudar com a versão do scikit-learn,
-a ordem das linhas ou a reexecução de células. No `pipeline.py` a letra passa a ser
-atribuída automaticamente pela **assinatura de sinais** da Tabela 1 (atribuição
-ótima pelo método húngaro), então não depende mais da numeração.
+**Vagas.** As vagas do item 5.1.3 (13/12/10/15) foram definidas pela participação
+de cada agrupamento, ou seja, pelo **formato** do perfil. Na nomenclatura dos
+arquivos ficam:
 
-> Isso também explica o comentário "a mudança é quase toda entre A e B": nas letras
-> do arquivo, A e B são, pelo Anexo III, os perfis **B e D**. É exatamente onde
-> ocorre a migração (ver item 3).
+| Perfil (arquivos) | Municípios (original) | Vagas |
+|---|---|---|
+| A (tudo abaixo) | 145 | 12 |
+| B (CIF acima) | 240 | 15 |
+| C (IMD/CSE acima) | 181 | 13 |
+| D (tudo acima) | 78 | 10 |
 
-Todos os arquivos novos estão com as letras do Anexo III.
+> **Atenção:** o Anexo III (Tabela 1, Eq. 9–12) e a tabela do item 5.1.3 do edital
+> ainda usam a nomenclatura antiga. Precisam ser atualizados para as letras dos
+> arquivos, senão a aplicação das vagas fica trocada.
 
 ## 3. Resultado da correção (`Z × √peso`)
 
 | | Original (`Z × peso`) | Revisada (`Z × √peso`) |
 |---|---|---|
 | Peso efetivo na distância | 35,5 / 46,4 / 18,1 | **35 / 40 / 25** |
-| Municípios A / B / C / D | 181 / 145 / 78 / 240 | 180 / 156 / 72 / 236 |
+| Municípios A / B / C / D | 145 / 240 / 181 / 78 | 156 / 236 / 180 / 72 |
 | Silhueta | 0,312 | 0,290 |
 
 Centroides em desvios-padrão (média de `Z` de cada eixo no perfil):
 
 | Perfil | Original CIF / IMD / CSE | Revisada CIF / IMD / CSE |
 |---|---|---|
-| A | −0,33 / +1,20 / +0,80 | −0,34 / +1,20 / +0,83 |
-| B | −1,03 / −0,65 / −0,51 | −0,80 / −0,79 / −0,97 |
-| C | +1,88 / +0,35 / +0,11 | +1,97 / +0,35 / **+0,03** |
-| D | +0,26 / −0,63 / −0,33 | +0,19 / −0,50 / **−0,00** |
+| A | −1,03 / −0,65 / −0,51 | −0,80 / −0,79 / −0,97 |
+| B | +0,26 / −0,63 / −0,33 | +0,19 / −0,50 / **−0,00** |
+| C | −0,33 / +1,20 / +0,80 | −0,34 / +1,20 / +0,83 |
+| D | +1,88 / +0,35 / +0,11 | +1,97 / +0,35 / **+0,03** |
 
 Migração entre perfis (linhas = original, colunas = revisada):
 
 | | A | B | C | D | Total |
 |---|---|---|---|---|---|
-| A | 175 | 1 | 0 | 5 | 181 |
-| B | 3 | 115 | 0 | 27 | 145 |
-| C | 2 | 0 | 71 | 5 | 78 |
-| D | 0 | 40 | 1 | 199 | 240 |
+| A | 115 | 27 | 3 | 0 | 145 |
+| B | 40 | 199 | 0 | 1 | 240 |
+| C | 1 | 5 | 175 | 0 | 181 |
+| D | 0 | 5 | 2 | 71 | 78 |
 
 - **87,0%** dos municípios ficam no mesmo perfil (o colega obteve 88%; a diferença é
-  de inicialização/versão do K-Means). A troca é quase toda **B ↔ D** (67 dos 84).
-  Faz sentido: B e D diferem principalmente em CSE, que é o eixo que ganha peso.
-- O perfil B fica mais "socioeconômico" (CSE −0,97σ) e o D passa a ter CSE na média.
+  de inicialização/versão do K-Means). A troca é quase toda **A ↔ B** (67 dos 84),
+  como no comentário. Faz sentido: A e B diferem principalmente em CSE, que é o eixo
+  que ganha peso.
+- O perfil A fica mais "socioeconômico" (CSE −0,97σ) e o B passa a ter CSE na média.
 - A queda da silhueta é esperada e não é critério para escolher pesos (os pesos são
   definição normativa; a silhueta só mede separação no espaço deformado pelos pesos).
 
-### Efeito sobre os 50 selecionados (vagas 13/12/10/15)
+### Efeito sobre os 50 selecionados (vagas A=12, B=15, C=13, D=10)
 
 | Critério de ordenação | Selecionados em comum (original × revisada) |
 |---|---|
-| IAP (regra do edital) | **42 / 50** – todas as 8 trocas no Perfil D |
+| IAP (regra do edital) | **42 / 50** – todas as 8 trocas no Perfil B |
 | Representatividade (distância ao centroide) | 27 / 50 |
 
-No IAP, 7 dos 15 primeiros do Perfil D original (Arco-Íris, São João das Duas
+No IAP, 7 dos 15 primeiros do Perfil B original (Arco-Íris, São João das Duas
 Pontes, Ribeira, Salmourão, Riversul, Piquete, Ribeirão Branco) migram para o
-Perfil B, e 1 (Pilar do Sul) para o C. Ou seja, os "mais alinhados" ao D pelo IAP
-original eram municípios na fronteira com o B – ver item 5.2.
+Perfil A, e 1 (Pilar do Sul) para o D. Entram Torre de Pedra, Jeriquara, Monte
+Castelo, Canitar, Sud Mennucci, Macaubal, Ouro Verde e Vargem. Ou seja, os "mais
+alinhados" ao B pelo IAP original eram municípios na fronteira com o A – ver item 5.2.
 
 ### Estabilidade frente à variação dos pesos (±20% em cada eixo, 26 cenários)
 
@@ -158,23 +162,24 @@ apenas o perfil a que ele pertence (e, portanto, com quem compete).
   "Complexidade Socioeconômica"; nos itens 3 e 5 são "Infraestrutura e Maturidade
   Digital" e "Condição Socioeconômica".
 - A Eq. (6) está com a formatação quebrada no .docx (três equações coladas).
-- Tabela 1: com a correção, o CSE de C (+0,03σ) e de D (−0,00σ) fica **na média**;
+- Tabela 1 e item 5.1.3: atualizar para a nomenclatura dos arquivos (item 2).
+- Tabela 1: com a correção, o CSE de D (+0,03σ) e de B (−0,00σ) fica **na média**;
   descrever como "próximo da média" em vez de "acima/abaixo".
 - Atualizar os testes de Kruskal-Wallis/Qui-quadrado do item 5 com os novos perfis.
 
 ### 5.2 Sinal de eixo "neutro" no IAP
 O IAP usa apenas o **sinal** do centroide (±1). Quando o perfil está na média de um
-eixo, o sinal é arbitrário mas pesa igual aos demais: com a correção, o IAP_D
+eixo, o sinal é arbitrário mas pesa igual aos demais: com a correção, o IAP_B
 (`CIF − IMD − CSE`) passa a privilegiar municípios com **pior** socioeconômico num
 perfil cujo CSE é 0,00σ. Isso empurra o topo do ranking para a fronteira com o
-Perfil B – foi exatamente o que aconteceu nas 8 trocas do item 3.
+Perfil A – foi exatamente o que aconteceu nas 8 trocas do item 3.
 
 Duas alternativas, em ordem de simplicidade:
 1. **Sinal neutro**: atribuir sinal 0 ao eixo quando `|centroide| < 0,25σ`.
 2. **IAP direcional**: `IAP_k = Σ_e w_e · Z_e · μ_ke / ‖μ_k‖` (projeção na direção do
    centroide). Generaliza a regra atual: eixos marcantes pesam mais, eixos na média
-   pesam ~0. Teste rápido na versão revisada: B mantém 12/12 selecionados, A 7/13,
-   C 7/10, D 8/15.
+   pesam ~0. Teste rápido na versão revisada: A mantém 12/12 selecionados, B 8/15,
+   C 7/13, D 7/10.
 
 Como o item 5.1.2 do edital fixa as Eq. 9–12, isso exigiria retificação; fica como
 recomendação para o próximo ciclo.
@@ -203,7 +208,7 @@ como critério de desempate ou como diagnóstico.
   da faixa A–C) e os subíndices contínuos do IMCI.
 
 ### 5.6 Higiene do código
-- Rótulos por assinatura de sinais (feito no `pipeline.py`).
+- Rótulos por assinatura de sinais em vez de mapeamento fixo (feito no `pipeline.py`).
 - Células duplicadas e um "Score"/"Ranking" alternativo (células 58–60, média
   simples dos eixos) que não entra no arquivo final – remover para evitar confusão.
 - O IAP é calculado sobre `base_cluster` (mesmo índice de `dados`); manter o
@@ -223,7 +228,9 @@ for e, w in zip(["CIF", "IMD", "CSE"], pesos):
     ranking[f"{e}_pond"] = ranking[e] * w        # usar *_pond nas Eq. 9-12
 ```
 
-e substituir o `mapa_perfis` fixo pela função `nomear_perfis` do `pipeline.py`.
+e substituir o `mapa_perfis` fixo pela função `nomear_perfis` do `pipeline.py`
+(que já usa a nomenclatura dos arquivos: A = tudo abaixo, B = CIF acima, C = IMD/CSE
+acima, D = tudo acima).
 
 ## Arquivos gerados (`resultados/`)
 
@@ -231,8 +238,8 @@ e substituir o `mapa_perfis` fixo pela função `nomear_perfis` do `pipeline.py`
 |---|---|
 | `Ranking_IAP_Municipios_raiz_peso.xlsx` | **Proposta**: perfis com `√peso`, ordenação por IAP; abas de selecionados (vagas), perfis e parâmetros |
 | `Ranking_Representatividade_raiz_peso.xlsx` | **Proposta**: perfis com `√peso`, ordenação por distância ao centroide |
-| `Ranking_IAP_Municipios_original_corrigido.xlsx` | Versão original (`peso`) com as letras corrigidas conforme o Anexo III |
-| `Ranking_Representatividade_original_corrigido.xlsx` | Idem, por representatividade |
+| `Ranking_IAP_Municipios_original.xlsx` | Versão original (`peso`) – idêntica aos arquivos `_2.xlsx` entregues, com as abas extras |
+| `Ranking_Representatividade_original.xlsx` | Idem, por representatividade |
 | `Comparacao_Original_vs_RaizPeso.xlsx` | Migração de perfis, município a município, entradas/saídas dos 50 selecionados e cenários de sensibilidade |
 
 Colunas: `*_z` = eixo padronizado; `*_kmeans` = entrada do K-Means (`Z × √peso` na

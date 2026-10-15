@@ -25,14 +25,21 @@ RESULTADOS = BASE / "resultados"
 EIXOS = ["CIF", "IMD", "CSE"]
 PESOS = np.array([0.35, 0.40, 0.25])  # pesos do edital (Anexo III, item 3.2)
 
-# Sinal esperado de cada eixo por perfil (Anexo III, Tabela 1 e Eq. 9-12)
+# Sinal esperado de cada eixo (CIF, IMD, CSE) por perfil.
+# Nomenclatura adotada nos arquivos de trabalho (difere da Tabela 1 do Anexo III):
+#   A = tudo abaixo da média            (Anexo III: B)
+#   B = CIF acima; IMD e CSE abaixo     (Anexo III: D)
+#   C = CIF abaixo; IMD e CSE acima     (Anexo III: A)
+#   D = tudo acima                      (Anexo III: C)
 ASSINATURA = {
-    "A": np.array([-1, +1, +1]),
-    "B": np.array([-1, -1, -1]),
-    "C": np.array([+1, +1, +1]),
-    "D": np.array([+1, -1, -1]),
+    "A": np.array([-1, -1, -1]),
+    "B": np.array([+1, -1, -1]),
+    "C": np.array([-1, +1, +1]),
+    "D": np.array([+1, +1, +1]),
 }
-VAGAS = {"A": 13, "B": 12, "C": 10, "D": 15}  # item 5.1.3 do edital
+# Vagas do item 5.1.3 acompanham o formato do perfil (não a letra):
+# Anexo A(-++)=13, B(---)=12, C(+++)=10, D(+--)=15
+VAGAS = {"A": 12, "B": 15, "C": 13, "D": 10}
 
 MAPA_IEGM = {"A": 5, "B+": 4, "B": 3, "C+": 2, "C": 1}
 
@@ -85,7 +92,7 @@ def construir_eixos(dados: pd.DataFrame) -> pd.DataFrame:
 # Etapa 3 – K-Means e nomeação dos perfis
 # ------------------------------------------------------------------
 def nomear_perfis(centroides: np.ndarray) -> dict:
-    """Associa cada cluster a A/B/C/D pela assinatura de sinais do Anexo III.
+    """Associa cada cluster a A/B/C/D pela assinatura de sinais (ASSINATURA).
 
     Substitui o mapeamento fixo {1:"A", 3:"B", 2:"C", 0:"D"}, que depende do
     número que o K-Means atribui a cada cluster e muda entre execuções/versões.
@@ -280,7 +287,7 @@ def main():
 
     orig, cent_o, met_o = montar_resultado(dados, eixos, PESOS, "original: Z*peso")
     nova, cent_n, met_n = montar_resultado(dados, eixos, np.sqrt(PESOS), "revisada: Z*raiz(peso)")
-    exportar_versao(orig, cent_o, met_o, "original_corrigido")
+    exportar_versao(orig, cent_o, met_o, "original")
     exportar_versao(nova, cent_n, met_n, "raiz_peso")
 
     sens = pd.concat([sensibilidade(dados, eixos, raiz=False),
