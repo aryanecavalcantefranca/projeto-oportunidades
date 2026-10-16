@@ -245,3 +245,35 @@ acima, D = tudo acima).
 Colunas: `*_z` = eixo padronizado; `*_kmeans` = entrada do K-Means (`Z × √peso` na
 proposta); `IAP` = Eq. 9–12 com `Z × peso`; `Distancia_Centroide` no espaço do K-Means;
 `Representatividade` = 0–100 dentro do perfil (100 = mais próximo do centroide).
+
+---
+
+## Cenário: peso de 20% para a Condição Socioeconômica
+
+Script: `cenario_cse20.py` · saídas em `resultados/cenario_cse20/`. Em todos os casos o
+K-Means usa `Z × √peso` e o IAP usa `Z × peso`. Vagas mantidas (A=12, B=15, C=13, D=10).
+Como o CSE perde 5 p.p., foram testadas três redistribuições:
+
+| | Vigente | Proporcional | +5 no IMD | +5 no CFI |
+|---|---|---|---|---|
+| Pesos CFI / IMD / CSE | 35 / 40 / 25 | 37,3 / 42,7 / 20 | 35 / 45 / 20 | 40 / 40 / 20 |
+| Municípios A / B / C / D | 156 / 236 / 180 / 72 | 144 / 240 / 181 / 79 | 143 / 241 / 182 / 78 | 146 / 239 / 180 / 79 |
+| Mesmo perfil que a vigente | — | 87,6% | 87,3% | 87,3% |
+| Selecionados IAP mantidos (de 50) | — | 41 | 40 | 41 |
+| Selecionados centroide mantidos | — | 27 | 28 | 28 |
+| Silhueta | 0,290 | 0,312 | 0,307 | 0,317 |
+| Pior cenário ±20%: mesmo perfil | 53,7% | 65,4% | 64,9% | 75,5% |
+| Pior cenário ±20%: selecionados IAP | 28 | 36 | 33 | 36 |
+| Pior cenário ±20%: selecionados centroide | 25 | 16 | 14 | 19 |
+
+- As três redistribuições dão praticamente o mesmo resultado; o que importa é o CSE cair para 20%.
+- **O cenário reproduz quase exatamente a versão original (antes da correção pela raiz):** 99% dos
+  municípios no mesmo perfil e 46 dos 50 selecionados iguais. Na versão original o peso efetivo
+  do CSE era 18,1%, muito próximo de 20%.
+- A migração é quase toda entre A e B (40 municípios de A→B e 26 de B→A), no sentido inverso ao da
+  correção: B volta a ter CSE abaixo da média (−0,33σ) e A passa a se distinguir sobretudo pelo CFI (−1,04σ).
+- O "CSE ≈ na média" do Perfil B deixa de valer (volta a "abaixo"); no D o CSE fica em +0,11σ.
+- No IAP, as 9 trocas concentram-se no Perfil B (voltam Ribeira, São João das Duas Pontes, Arco-Íris,
+  Ribeirão Branco, Riversul, Salmourão e Lutécia), mais uma troca em A e uma em C.
+- A partição fica um pouco mais estável a variações de peso, mas o ranking por centroide fica menos
+  estável no pior cenário.

@@ -117,7 +117,7 @@ def clusterizar(eixos: pd.DataFrame, fator: np.ndarray, seed: int = 42):
 # ------------------------------------------------------------------
 # Etapas 4 a 6 – Distância, representatividade e IAP
 # ------------------------------------------------------------------
-def montar_resultado(dados, eixos, fator, rotulo):
+def montar_resultado(dados, eixos, fator, rotulo, pesos=PESOS):
     X, km, perfil, centroides = clusterizar(eixos, fator)
 
     r = dados[["cod_ibge", "municipio", "RA", "porte", "populacao"]].copy()
@@ -125,7 +125,7 @@ def montar_resultado(dados, eixos, fator, rotulo):
     for i, e in enumerate(EIXOS):
         r[f"{e}_z"] = eixos[e]                 # eixo padronizado (Eq. 5)
         r[f"{e}_kmeans"] = X[:, i]            # entrada do K-Means
-        r[f"{e}_pond"] = eixos[e] * PESOS[i]  # eixo * peso do edital (Eq. 6)
+        r[f"{e}_pond"] = eixos[e] * pesos[i]  # eixo * peso (Eq. 6)
 
     # IAP (Eq. 9-12). É linear: o peso entra uma única vez, então usa-se
     # Z * peso (35/40/25 exatos) – igual ao notebook original.
@@ -162,21 +162,21 @@ def selecionados(r, criterio):
     return set(r.loc[r[col] <= r["Perfil"].map(VAGAS), "cod_ibge"])
 
 
-def sensibilidade(dados, eixos, raiz: bool, delta=0.20):
+def sensibilidade(dados, eixos, raiz: bool, delta=0.20, pesos=PESOS):
     """Varia cada peso em {-delta, 0, +delta} (26 cenários, renormalizados a 1)
     e compara com o cenário-base: perfil, ranking e lista dos 50 selecionados."""
-    fator_base = np.sqrt(PESOS) if raiz else PESOS
-    base, _, _ = montar_resultado(dados, eixos, fator_base, "base")
+    fator_base = np.sqrt(pesos) if raiz else pesos
+    base, _, _ = montar_resultado(dados, eixos, fator_base, "base", pesos)
     linhas = []
     for a in (-delta, 0, delta):
         for b in (-delta, 0, delta):
             for c in (-delta, 0, delta):
                 if a == b == c == 0:
                     continue
-                w = PESOS * (1 + np.array([a, b, c]))
+                w = pesos * (1 + np.array([a, b, c]))
                 w = w / w.sum()
                 fator = np.sqrt(w) if raiz else w
-                r, _, _ = montar_resultado(dados, eixos, fator, "cen")
+                r, _, _ = montar_resultado(dados, eixos, fator, "cen", pesos)
                 m = base.merge(r, on="cod_ibge", suffixes=("_b", "_c"))
                 mesmo = m[m["Perfil_b"] == m["Perfil_c"]]
                 linhas.append({
