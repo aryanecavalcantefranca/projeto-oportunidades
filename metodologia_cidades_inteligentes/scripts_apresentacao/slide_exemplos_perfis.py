@@ -23,10 +23,10 @@ LAR, BRA, CINZA, CARD, BORDA = "F99828", "E6E6E6", "9AA0A6", "1E1E1E", "3A3A3A"
 FRASE = {
     "A": "{a} está abaixo da média nos três eixos com muito mais intensidade que o grupo; "
          "{b} tem valores próximos aos da média do Perfil A.",
-    "B": "{a} é o caso extremo do perfil (CFI muito alto, IMD e CSE muito baixos) e, por isso, "
-         "o menos típico; {b} está praticamente no centro do grupo.",
-    "C": "{a} tem forte alinhamento às direções do Perfil C, mas se afasta da combinação média; "
-         "{b} é o que mais se aproxima do padrão do grupo.",
+    "B": "{a} é o caso extremo do perfil (CFI muito alto, IMD e CSE muito baixos); "
+         "{b} está no centro do grupo.",
+    "C": "{a} é forte nas direções do Perfil C, mas foge da combinação média; "
+         "{b} é a mais próxima do padrão do grupo.",
     "D": "{a} é extrema em CFI e IMD: 1ª no IAP e a mais distante do centro; "
          "{b} reproduz o padrão médio do Perfil D.",
 }
@@ -113,17 +113,20 @@ for i, k in enumerate("ABCD"):
                        [[(f"PERFIL {k}", 1300, True, BRA)], [(f"{n} municípios", 1000, False, CINZA)]], "ctr"))
     yb = Y0 + PAD + 600000
     blocos = [
-        ("1º NO IAP", a.municipio, [f"IAP = {fmt(a.IAP)}",
+        ("1º NO IAP", a.municipio, [f"IAP = {fmt(a.IAP)} · 1º de {n}",
+                                    f"Distância ao centroide = {fmt(a.Distancia_Centroide)}",
                                     f"Representatividade: {a.Ranking_Representatividade}º de {n}"]),
-        ("1º EM REPRESENTATIVIDADE", b.municipio, [f"Distância ao centroide = {fmt(b.Distancia_Centroide)}",
-                                                    f"IAP: {b.Ranking}º de {n}"]),
+        ("1º EM REPRESENTATIVIDADE", b.municipio, [f"IAP = {fmt(b.IAP)} · {b.Ranking}º de {n}",
+                                                    f"Distância ao centroide = {fmt(b.Distancia_Centroide)}",
+                                                    f"Representatividade: 1º de {n}"]),
     ]
+    HB = 1190000
     for rot, nome, linhas in blocos:
-        novos.append(forma(x + PAD, yb, W - 2 * PAD, 1010000, "262626", adj=6000, linha=BORDA))
-        novos.append(texto(x + PAD + 110000, yb + 90000, W - 2 * PAD - 220000, 900000,
+        novos.append(forma(x + PAD, yb, W - 2 * PAD, HB, "262626", adj=6000, linha=BORDA))
+        novos.append(texto(x + PAD + 110000, yb + 90000, W - 2 * PAD - 220000, HB - 120000,
                            [[(rot, 900, True, LAR)], [(nome, 1250, True, BRA)]]
                            + [[(l, 1000, False, BRA)] for l in linhas]))
-        yb += 1010000 + 110000
+        yb += HB + 110000
     frase = FRASE[k].format(a=a.municipio, b=b.municipio)
     novos.append(texto(x + PAD, yb + 40000, W - 2 * PAD, Y0 + H - yb - 140000, [[(frase, 1000, False, CINZA)]]))
 
