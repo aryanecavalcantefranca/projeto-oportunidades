@@ -277,3 +277,27 @@ Como o CSE perde 5 p.p., foram testadas três redistribuições:
   Ribeirão Branco, Riversul, Salmourão e Lutécia), mais uma troca em A e uma em C.
 - A partição fica um pouco mais estável a variações de peso, mas o ranking por centroide fica menos
   estável no pior cenário.
+
+---
+
+## Proposta em teste: diversidade dentro dos perfis (pesos 30/40/30)
+
+Script: `diversidade_subgrupos.py` · saída: `resultados/diversidade_30_40_30/Selecao_diversidade_30_40_30.xlsx`.
+
+1. **Perfis** – K-Means (K = 4) com pesos CFI 30% / IMD 40% / CSE 30%, aplicados como √peso
+   (fatores 0,548 / 0,632 / 0,548; peso efetivo exatamente 30/40/30). Silhueta 0,284.
+2. **Subgrupos** – novo K-Means dentro de cada perfil, no mesmo espaço. k entre 2 e 5; descartam-se
+   opções com subgrupo < 10 municípios; escolhe-se o menor k com silhueta a até 0,01 da melhor.
+3. **Vagas** – iguais entre os subgrupos do perfil; a sobra vai para os maiores.
+4. **Seleção** – em cada subgrupo, os mais próximos do centroide do subgrupo.
+
+| Perfil | Municípios | CFI / IMD / CSE (z) | Subgrupos | Vagas | Divisão |
+|---|---|---|---|---|---|
+| A | 191 | −0,42 / −0,68 / −1,11 | 4 | 12 | 3 / 3 / 3 / 3 |
+| B | 195 | −0,08 / −0,54 / **+0,33** | 2 | 15 | 8 / 7 |
+| C | 176 | −0,32 / +1,23 / +0,86 | 3 | 13 | 5 / 4 / 4 |
+| D | 82 | +1,86 / +0,20 / −0,05 | 2 | 10 | 5 / 5 |
+
+Atenção: com 30/40/30 o Perfil B passa a ter CSE acima da média e o D se diferencia quase só pelo CFI;
+84,3% dos municípios mantêm o perfil da versão vigente. As vagas (12/15/13/10) foram mantidas por
+hipótese e precisam ser revistas junto com a descrição dos perfis.
