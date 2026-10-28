@@ -301,3 +301,16 @@ Script: `diversidade_subgrupos.py` · saída: `resultados/diversidade_30_40_30/S
 Atenção: com 30/40/30 o Perfil B passa a ter CSE acima da média e o D se diferencia quase só pelo CFI;
 84,3% dos municípios mantêm o perfil da versão vigente. As vagas (12/15/13/10) foram mantidas por
 hipótese e precisam ser revistas junto com a descrição dos perfis.
+
+### Atualização: diversidade incluindo outliers
+
+A seleção "mais próximos do centroide do subgrupo" não incluía nenhum outlier. A regra passou a ser
+**do típico ao mais diferente** (maximin): em cada subgrupo, o 1º é o mais típico e cada seguinte é o
+município mais diferente dos já escolhidos. Outlier = distância ao centroide do perfil > Q3 + 1,5·IQR.
+
+| Perfil | Munic. | Vagas | Subgr. | Variação explicada pelos subgrupos | Outliers (incluídos) | Diversidade entre escolhidos (típicos → diversidade) | Pior cobertura (típicos → diversidade) |
+|---|---|---|---|---|---|---|---|
+| A | 191 | 12 | 4 | 58,7% | 0 (—) | 0,76 → 1,17 | 0,93 → 0,68 |
+| B | 195 | 15 | 2 | 29,3% | 2 (2) | 0,30 → 1,11 | 1,14 → 0,53 |
+| C | 176 | 13 | 3 | 51,5% | 4 (4) | 0,66 → 1,38 | 1,10 → 0,66 |
+| D | 82 | 10 | 2 | 39,9% | 4 (3) | 0,74 → 1,59 | 1,51 → 0,78 |
